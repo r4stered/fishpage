@@ -17,9 +17,12 @@ livestock to order. Not a public storefront.
   [ADR 0001](docs/adr/0001-sku-permanent-key-upsert-never-delete.md).
 - Serves a grid of Item cards — defaulting to in-stock only, with a toggle for the rest —
   with **fuzzy name search** (approximate, order-independent matching ranked by relevance;
-  see [ADR 0004](docs/adr/0004-fuzzy-name-search-scorers.md)) and a **Derived Category**
-  filter. Size/on-special filters and effective-price sort are the next slice
-  ([#8](https://github.com/r4stered/fishpage/issues/8)).
+  see [ADR 0004](docs/adr/0004-fuzzy-name-search-scorers.md)) and **Derived Category**,
+  **Size**, and **on-special** filters, plus an **effective-price sort** (special price if
+  present, else retail). The Size filter matches the raw stocklist token against the grade
+  set `-`/`S`/`M`/`L`/`Jumbo`; per
+  [ADR 0002](docs/adr/0002-size-column-is-overloaded.md) packaging-unit rows (e.g. `POTTED`)
+  match no grade. Every control combines.
 - Rebuilds the catalog from a configured Stocklist PDF on start; a watched-folder trigger
   for nightly automation is a later slice
   ([#9](https://github.com/r4stered/fishpage/issues/9)).
@@ -82,11 +85,11 @@ upsert-by-SKU reconciliation with `last_seen` and zeroed absentees
 ([#4](https://github.com/r4stered/fishpage/issues/4)), the in-stock default + out-of-stock
 toggle ([#5](https://github.com/r4stered/fishpage/issues/5)), the Derived Category filter
 ([#6](https://github.com/r4stered/fishpage/issues/6)), fuzzy name search
-([#7](https://github.com/r4stered/fishpage/issues/7)), and the CI / dev-tooling gate
-([#14](https://github.com/r4stered/fishpage/issues/14)).
+([#7](https://github.com/r4stered/fishpage/issues/7)), the Size/on-special filters and
+effective-price sort ([#8](https://github.com/r4stered/fishpage/issues/8)), and the
+CI / dev-tooling gate ([#14](https://github.com/r4stered/fishpage/issues/14)).
 
-Remaining v1 slices: size/on-special filters and effective-price sort
-([#8](https://github.com/r4stered/fishpage/issues/8)), watched-folder ingestion
+Remaining v1 slices: watched-folder ingestion
 ([#9](https://github.com/r4stered/fishpage/issues/9)), containerization with a persistent
 volume ([#10](https://github.com/r4stered/fishpage/issues/10)), and parser resilience for
 varied layouts and malformed rows

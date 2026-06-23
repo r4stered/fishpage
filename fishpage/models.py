@@ -34,3 +34,8 @@ class Item:
     def category(self) -> str:
         """The Derived Category, computed purely from the SKU and name — never stored."""
         return derive_category(self.sku, self.name)
+
+    @property
+    def effective_price(self) -> Decimal:
+        """The price that actually applies: the Special price when present, else Retail."""
+        return self.retail_price if self.special_price is None else self.special_price

@@ -1,0 +1,92 @@
+from decimal import Decimal
+
+from fishpage.browse import browse
+from fishpage.models import Item
+
+# retail 10, no special → effective price 10
+PLAIN = Item("1", "M", "Plain", Decimal("10.00"), None, 5)
+# retail 100 but special 5 → effective price 5, cheaper than PLAIN despite the higher retail
+DISCOUNTED = Item("2", "M", "Discounted", Decimal("100.00"), Decimal("5.00"), 5)
+
+SMALL = Item("3", "S", "Small One", Decimal("4.00"), None, 5)
+JUMBO = Item("4", "Jumbo", "Big One", Decimal("80.00"), None, 5)
+# A plant row whose raw size token is a packaging unit, not a grade.
+POTTED = Item("5", "POTTED", "Sword Plant", Decimal("3.50"), None, 5)
+
+
+def test_sort_price_asc_orders_by_effective_price_not_retail():
+    result = browse([PLAIN, DISCOUNTED], sort="price_asc")
+
+    # DISCOUNTED's special (5) beats PLAIN's retail (10), even though its retail is higher,
+    # so the effective price — not the retail — decides the order.
+    assert [item.sku for item in result] == ["2", "1"]
+
+
+def test_sort_price_desc_orders_by_descending_effective_price():
+    result = browse([DISCOUNTED, PLAIN], sort="price_desc")
+
+    # PLAIN's effective 10 leads DISCOUNTED's effective 5 when sorting high to low.
+    assert [item.sku for item in result] == ["1", "2"]
+
+
+def test_size_filter_keeps_only_the_matching_raw_grade():
+    result = browse([PLAIN, SMALL, JUMBO, POTTED], size="M")
+
+    # Exact match on the raw size token: only the M grade survives; the packaging-unit
+    # row never matches a grade value.
+    assert [item.sku for item in result] == ["1"]
+
+
+def test_empty_size_filters_nothing():
+    result = browse([PLAIN, SMALL, JUMBO], size="")
+
+    assert {item.sku for item in result} == {"1", "3", "4"}
+
+
+def test_on_special_keeps_only_items_with_a_special_price():
+    result = browse([PLAIN, DISCOUNTED, SMALL], on_special=True)
+
+    # Only DISCOUNTED carries a special price; the retail-only Items drop out.
+    assert [item.sku for item in result] == ["2"]
+
+
+def test_on_special_off_keeps_everything():
+    result = browse([PLAIN, DISCOUNTED], on_special=False)
+
+    assert {item.sku for item in result} == {"1", "2"}
+
+
+# SKU block + leading name word drive the Derived Category. 120... + "Angelfish" → Angelfish.
+ANGEL = Item("120091", "S", "Angelfish Full Black", Decimal("9.99"), None, 5)
+BARB = Item("170011", "-", "Barb Cherry", Decimal("3.99"), None, 5)
+
+
+def test_category_filter_keeps_only_the_matching_category():
+    result = browse([ANGEL, BARB], category="Angelfish")
+
+    assert [item.sku for item in result] == ["120091"]
+
+
+def test_empty_category_filters_nothing():
+    result = browse([ANGEL, BARB], category="")
+
+    assert {item.sku for item in result} == {"120091", "170011"}
+
+
+ANGEL_KOI = Item("120093", "M", "Angelfish Koi", Decimal("12.99"), None, 5)
+ANGEL_KOI_EXACT = Item("120094", "M", "Angel Koi", Decimal("14.99"), None, 5)
+
+
+def test_search_filters_and_ranks_by_relevance():
+    result = browse([ANGEL_KOI, ANGEL_KOI_EXACT, BARB], search="angel koi")
+
+    # The Barb drops out; the tighter "Angel Koi" outranks the padded "Angelfish Koi".
+    assert [item.sku for item in result] == ["120094", "120093"]
+
+
+def test_price_sort_overrides_search_relevance_order():
+    result = browse([ANGEL_KOI, ANGEL_KOI_EXACT], search="angel koi", sort="price_asc")
+
+    # Both match the search, but an explicit price sort wins over relevance ranking:
+    # the cheaper Angelfish Koi (12.99) leads the pricier exact match (14.99).
+    assert [item.sku for item in result] == ["120093", "120094"]
