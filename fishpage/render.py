@@ -18,10 +18,12 @@ def render_catalog(
     include_out_of_stock: bool = False,
     categories: list[str] | None = None,
     selected_category: str | None = None,
+    search: str = "",
 ) -> str:
     return _env.get_template("catalog.html").render(
         items=items,
         include_out_of_stock=include_out_of_stock,
         categories=categories or [],
         selected_category=selected_category,
+        search=search,
     )

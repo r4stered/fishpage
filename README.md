@@ -12,13 +12,17 @@ livestock to order. Not a public storefront.
   price, quantity) and stores them in SQLite.
 - Ingestion is **upsert-by-SKU and never deletes**: an item missing from the latest
   Stocklist goes to quantity 0 (with a `last_seen` date) rather than disappearing, so any
-  data attached to it survives temporary stock-outs. See
+  data attached to it survives temporary stock-outs. A **reuse guard** flags any SKU that
+  reappears under a materially different name for human review. See
   [ADR 0001](docs/adr/0001-sku-permanent-key-upsert-never-delete.md).
-- Serves a grid of item cards — defaulting to in-stock only, with a toggle for the rest —
-  with fuzzy name search, filtering by Derived Category / size / on-special, and
-  effective-price sort.
-- Ingests by watching a folder: drop a new PDF in and it re-parses, so the same path works
-  for a future nightly automation.
+- Serves a grid of Item cards — defaulting to in-stock only, with a toggle for the rest —
+  with **fuzzy name search** (approximate, order-independent matching ranked by relevance;
+  see [ADR 0004](docs/adr/0004-fuzzy-name-search-scorers.md)) and a **Derived Category**
+  filter. Size/on-special filters and effective-price sort are the next slice
+  ([#8](https://github.com/r4stered/fishpage/issues/8)).
+- Rebuilds the catalog from a configured Stocklist PDF on start; a watched-folder trigger
+  for nightly automation is a later slice
+  ([#9](https://github.com/r4stered/fishpage/issues/9)).
 
 ## Stack
 
@@ -71,11 +75,22 @@ uvx pre-commit install
 
 ## Status
 
-Walking skeleton ([#2](https://github.com/r4stered/fishpage/issues/2)) landed: the sample
-Stocklist parses into SQLite and renders as an unstyled grid of Item cards. Ingestion is a
-plain insert into a fresh DB for now — the upsert-by-SKU reconciliation, search/filter/sort,
-and watched folder are later slices (#3–#10) of PRD
-[#1](https://github.com/r4stered/fishpage/issues/1).
+Active development against PRD [#1](https://github.com/r4stered/fishpage/issues/1). Landed
+so far: the walking skeleton ([#2](https://github.com/r4stered/fishpage/issues/2)),
+upsert-by-SKU reconciliation with `last_seen` and zeroed absentees
+([#3](https://github.com/r4stered/fishpage/issues/3)), the reuse guard
+([#4](https://github.com/r4stered/fishpage/issues/4)), the in-stock default + out-of-stock
+toggle ([#5](https://github.com/r4stered/fishpage/issues/5)), the Derived Category filter
+([#6](https://github.com/r4stered/fishpage/issues/6)), fuzzy name search
+([#7](https://github.com/r4stered/fishpage/issues/7)), and the CI / dev-tooling gate
+([#14](https://github.com/r4stered/fishpage/issues/14)).
+
+Remaining v1 slices: size/on-special filters and effective-price sort
+([#8](https://github.com/r4stered/fishpage/issues/8)), watched-folder ingestion
+([#9](https://github.com/r4stered/fishpage/issues/9)), containerization with a persistent
+volume ([#10](https://github.com/r4stered/fishpage/issues/10)), and parser resilience for
+varied layouts and malformed rows
+([#12](https://github.com/r4stered/fishpage/issues/12), [#13](https://github.com/r4stered/fishpage/issues/13)).
 
 ## Out of scope (deferred to phase 2)
 
