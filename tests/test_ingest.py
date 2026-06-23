@@ -5,6 +5,8 @@ import shutil
 from datetime import date
 from pathlib import Path
 
+import pytest
+
 import fishpage.ingest as ingest_mod
 from fishpage.ingest import _ingest_pass, ingest_pending, stocklist_date
 from fishpage.store import all_items, open_store
@@ -160,5 +162,45 @@ def test_stocklist_date_reads_the_filename():
     assert stocklist_date(Path("Freshwater_Stocklist_6-19-26.pdf")) == date(2026, 6, 19)
 
 
-def test_stocklist_date_falls_back_to_today_when_unnamed():
-    assert stocklist_date(Path("no_date_here.pdf")) == date.today()
+def test_stocklist_date_raises_when_filename_has_no_date():
+    with pytest.raises(ValueError, match="no Stocklist date in filename"):
+        stocklist_date(Path("no_date_here.pdf"))
+
+
+def test_undated_drop_is_skipped_not_stamped_with_today(tmp_path):
+    incoming = tmp_path / "incoming"
+    processed = tmp_path / "processed"
+    conn = open_store(tmp_path / "fishpage.db")
+
+    # Seed a full catalog from a properly dated Stocklist.
+    _drop(incoming, "Freshwater_Stocklist_6-19-26.pdf")
+    ingest_pending(conn, incoming, processed)
+
+    # A valid Stocklist whose name carries no M-D-YY date must not be reconciled with today().
+    undated = _drop(incoming, "stocklist.pdf")
+    ingested = ingest_pending(conn, incoming, processed)
+
+    assert ingested == []
+    stored = {item.sku: item for item in all_items(conn)}
+    assert stored["110012"].last_seen == date(2026, 6, 19)  # not restamped with today's date
+    assert undated.is_file()  # left in incoming for the user to rename
+
+
+def test_older_drop_in_a_later_pass_is_skipped(tmp_path):
+    incoming = tmp_path / "incoming"
+    processed = tmp_path / "processed"
+    conn = open_store(tmp_path / "fishpage.db")
+
+    # Pass 1: the newer Stocklist lands and is reconciled.
+    _drop(incoming, "Freshwater_Stocklist_6-26-26.pdf")
+    ingest_pending(conn, incoming, processed)
+
+    # Pass 2: an older Stocklist arrives after the newer one was already applied.
+    stale = _drop(incoming, "Freshwater_Stocklist_6-19-26.pdf")
+    ingested = ingest_pending(conn, incoming, processed)
+
+    assert ingested == []  # not applied out of order
+    stored = {item.sku: item for item in all_items(conn)}
+    assert stored["110012"].last_seen == date(2026, 6, 26)  # not regressed
+    assert stored["110012"].qty_avail == 10  # not zeroed by a stale absentee sweep
+    assert stale.is_file()  # left in incoming, not silently consumed

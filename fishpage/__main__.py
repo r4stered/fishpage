@@ -8,6 +8,7 @@ PDF dropped into the incoming directory into the same connection the app serves 
 
 import os
 import threading
+from datetime import date
 from pathlib import Path
 
 import uvicorn
@@ -35,7 +36,13 @@ def build_app():
     db_path.unlink(missing_ok=True)  # fresh DB each start
     conn = open_store(db_path)
     items = parse_stocklist(pdf_path)
-    reconcile(conn, items, stocklist_date(pdf_path))
+    # The startup PDF may be an ad-hoc path without the M-D-YY name convention; into a fresh DB
+    # there are no absentees to mis-zero, so dating it today is a harmless convenience here.
+    try:
+        startup_date = stocklist_date(pdf_path)
+    except ValueError:
+        startup_date = date.today()
+    reconcile(conn, items, startup_date)
     print(f"Loaded {len(items)} Items from {pdf_path.name}")
 
     watcher = threading.Thread(

@@ -15,7 +15,7 @@ from datetime import date
 from pathlib import Path
 
 from fishpage.parser import parse_stocklist
-from fishpage.store import reconcile
+from fishpage.store import latest_stocklist_date, reconcile
 
 _log = logging.getLogger(__name__)
 
@@ -23,29 +23,52 @@ _log = logging.getLogger(__name__)
 def ingest_pending(conn: sqlite3.Connection, incoming_dir: Path, processed_dir: Path) -> list[Path]:
     """Reconcile every Stocklist PDF currently in ``incoming_dir`` into the catalog.
 
-    Each PDF is parsed and reconciled (the single upsert-by-SKU path), then moved to
+    Each eligible PDF is parsed and reconciled (the single upsert-by-SKU path), then moved to
     ``processed_dir`` so a later scan won't re-ingest it. Returns the source paths ingested,
     in processing order — each has already been moved, so it now lives under ``processed_dir``,
     not at the returned location.
 
-    A parse that yields no Items is treated as an incomplete drop, not an empty Stocklist:
-    it is skipped and left in ``incoming_dir`` for a later retry rather than reconciled, since
-    reconciling nothing would zero every SKU in the catalog.
+    Three kinds of drop are skipped and left in ``incoming_dir`` rather than reconciled, because
+    each would otherwise corrupt the catalog through ``reconcile``'s run-date semantics:
+
+    - **No date in the filename.** The Stocklist date drives ``last_seen`` and the absentee
+      sweep, so a missing date can't be guessed — the file waits to be renamed.
+    - **Older than the catalog.** Ingestion is monotonic: a Stocklist no newer than the latest
+      already reconciled would regress ``last_seen`` and zero every SKU absent from it. This
+      guards the cross-pass case the within-pass date sort cannot see.
+    - **No parsed Items.** Treated as an incomplete copy, not an empty Stocklist; reconciling
+      nothing would zero every SKU. It waits to settle and is retried.
     """
     processed_dir.mkdir(parents=True, exist_ok=True)
-    # Reconcile oldest-first so the newest Stocklist lands last: reconcile zeroes absentees
-    # and advances last_seen by the run's date, so applying an older drop after a newer one
-    # would regress both. Sort by the filename-derived date, not the filename itself.
-    pending = sorted(incoming_dir.glob("*.pdf"), key=stocklist_date)
+    latest = latest_stocklist_date(conn)
+
+    dated: list[tuple[date, Path]] = []
+    for pdf in incoming_dir.glob("*.pdf"):
+        try:
+            dated.append((stocklist_date(pdf), pdf))
+        except ValueError:
+            _log.warning("Skipping %s: no M-D-YY date in its name; rename it to ingest.", pdf.name)
+
     ingested: list[Path] = []
-    for pdf in pending:
+    # Oldest-first so the newest Stocklist lands last; reconcile pivots the absentee sweep on
+    # the run date, so an older drop applied after a newer one regresses the catalog.
+    for stocklist, pdf in sorted(dated, key=lambda pair: pair[0]):
+        if latest is not None and stocklist <= latest:
+            _log.warning(
+                "Skipping %s: its date %s is not newer than the catalog's %s.",
+                pdf.name,
+                stocklist,
+                latest,
+            )
+            continue
         items = parse_stocklist(pdf)
         if not items:
             _log.warning(
                 "Parsed no Items from %s; leaving it for retry (incomplete copy?).", pdf.name
             )
             continue
-        reconcile(conn, items, stocklist_date(pdf))
+        reconcile(conn, items, stocklist)
+        latest = stocklist  # advance so a same-pass duplicate date is also held back
         # shutil.move, not Path.rename: incoming and processed may sit on different mounts,
         # where rename raises EXDEV. move falls back to copy+delete across devices.
         shutil.move(pdf, processed_dir / pdf.name)
@@ -88,9 +111,14 @@ def _ingest_pass(conn: sqlite3.Connection, incoming_dir: Path, processed_dir: Pa
 
 
 def stocklist_date(pdf_path: Path) -> date:
-    """Derive the Stocklist date from a ``..._M-D-YY.pdf`` filename, else fall back to today."""
+    """Derive the Stocklist date from a ``..._M-D-YY.pdf`` filename.
+
+    Raises :class:`ValueError` when the name carries no ``M-D-YY`` token. The date is the
+    authoritative run-date for reconciliation, so a caller must decide what to do about a
+    nameless file rather than have one silently invented.
+    """
     match = re.search(r"(\d{1,2})-(\d{1,2})-(\d{2})\b", pdf_path.stem)
     if match is None:
-        return date.today()
+        raise ValueError(f"no Stocklist date in filename: {pdf_path.name!r}")
     month, day, year = (int(part) for part in match.groups())
     return date(2000 + year, month, day)

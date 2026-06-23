@@ -40,11 +40,22 @@ watcher at all — it would call the same core from a bucket-notification handle
 Ingested PDFs are **moved to `processed/`**, not deleted: re-scanning is then idempotent (a moved file is
 not seen again) and the source Stocklists remain as an audit trail.
 
-When several drops are pending in one pass they are reconciled in **Stocklist-date order** (parsed from
-the `..._M-D-YY.pdf` filename), not filename order. Reconciliation zeroes absentees and advances
-`last_seen` by the run's date, so applying an older Stocklist after a newer one would regress both. Note
-that filename lexical order disagrees with calendar order (`6-19-26` sorts before `6-9-26`), so the sort
-key must be the parsed date.
+Drops are reconciled in **Stocklist-date order** (parsed from the `..._M-D-YY.pdf` filename), not filename
+order. Reconciliation zeroes absentees and advances `last_seen` by the run's date, so applying an older
+Stocklist after a newer one would regress both. Note that filename lexical order disagrees with calendar
+order (`6-19-26` sorts before `6-9-26`), so the sort key must be the parsed date.
+
+Sorting within a pass only orders the files present *that tick*. Across passes — a newer Stocklist
+ingested and moved aside, then an older one dropped before the next tick — there is nothing to sort
+against, so ingestion is made **monotonic** instead: each pass reads the catalog's latest reconciled date
+(`MAX(last_seen)`) and skips any drop not strictly newer. An out-of-order or re-dropped Stocklist is left
+in `incoming` with a logged warning rather than regressing the live catalog. This guard lives in the
+ingestion layer, not in `reconcile`, which stays trigger-agnostic.
+
+A drop whose filename carries **no `M-D-YY` date** is likewise skipped and left for the user to rename:
+the date is the authoritative run-date, and inventing one (e.g. today's) would silently mis-stamp
+`last_seen` and mis-pivot the absentee sweep. `stocklist_date` therefore raises rather than guessing, and
+the ingestion pass turns that into a per-file skip so one misnamed drop cannot wedge the others.
 
 ## Consequences
 
@@ -52,9 +63,10 @@ key must be the parsed date.
 - The watcher shares the connection the app serves from, so a drop is reflected in the live catalog
   without a restart. That makes a request handler a concurrent reader against the ingestion writer; the
   brief half-reconciled read window this opens is accepted as-is for a low-traffic internal tool.
-- A *permanently* unparseable PDF — one that always raises, or always parses to zero rows — is retried
-  every tick forever and never leaves `incoming`. Distinguishing "still copying" from "broken" is deferred
-  to the parser-resilience work; until then a broken drop is noisy in the logs but harmless to the catalog.
+- A drop that can never become eligible — permanently unparseable (always raises or parses to zero rows),
+  misnamed, or older than the catalog — is retried and re-skipped every tick, staying in `incoming`. That
+  is noisy in the logs but harmless to the catalog, and self-resolves once the user renames, removes, or
+  replaces the file. Distinguishing "still copying" from "broken" is deferred to the parser-resilience work.
 - Files are moved with `shutil.move`, not `Path.rename`, so `incoming` and `processed` may sit on
   different mounts without an `EXDEV` failure.
 - "Absent" is defined by run date in reconciliation, so a real run needs a distinct date per Stocklist —

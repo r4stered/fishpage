@@ -140,6 +140,17 @@ def _is_reuse(stored_name: str | None, incoming_name: str) -> bool:
     return _normalize_name(stored_name) != _normalize_name(incoming_name)
 
 
+def latest_stocklist_date(conn: sqlite3.Connection) -> date | None:
+    """The most recent Stocklist date reconciled into the store, or ``None`` if it is empty.
+
+    This is ``MAX(last_seen)``: every reconcile stamps its present SKUs with the run's date, so
+    the maximum is the newest Stocklist ever applied. Callers use it to keep ingestion monotonic
+    — refusing to apply a Stocklist older than one already reconciled.
+    """
+    row = conn.execute("SELECT MAX(last_seen) AS latest FROM items").fetchone()
+    return None if row["latest"] is None else date.fromisoformat(row["latest"])
+
+
 def all_items(conn: sqlite3.Connection, *, include_out_of_stock: bool = True) -> list[Item]:
     """Read every stored Item, newest schema columns included.
 
