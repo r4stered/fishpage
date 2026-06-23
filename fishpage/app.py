@@ -43,8 +43,8 @@ def create_app(conn: sqlite3.Connection) -> FastAPI:
         items = all_items(conn, include_out_of_stock=include_out_of_stock)
         items = browse(
             items,
-            category=category or "",
-            size=size or "",
+            category=category,
+            size=size,
             on_special=on_special,
             search=search,
             sort=sort,
@@ -69,8 +69,8 @@ def create_app(conn: sqlite3.Connection) -> FastAPI:
             items = [item for item in items if item.qty_avail > 0]
         items = browse(
             items,
-            category=category or "",
-            size=size or "",
+            category=category,
+            size=size,
             on_special=on_special,
             search=search,
             sort=sort,

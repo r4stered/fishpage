@@ -12,8 +12,8 @@ SIZE_GRADES = ("-", "S", "M", "L", "Jumbo")
 def browse(
     items: list[Item],
     *,
-    category: str = "",
-    size: str = "",
+    category: str | None = None,
+    size: str | None = None,
     on_special: bool = False,
     search: str = "",
     sort: str = "",
@@ -23,8 +23,8 @@ def browse(
     ``category`` keeps only Items in that Derived Category; ``size`` matches the Item's raw
     size token exactly (per the overloaded-column design, the catalog filters on the stored
     token, so a grade like ``M`` never matches a packaging unit like ``POTTED``);
-    ``on_special`` keeps only Items carrying a special price. An empty ``category``/``size``
-    is no filter.
+    ``on_special`` keeps only Items carrying a special price. A blank or omitted
+    ``category``/``size`` is no filter.
 
     ``search`` narrows to fuzzy name matches and ranks survivors by relevance; an explicit
     ``sort`` then re-orders those survivors by effective price, overriding the relevance rank.

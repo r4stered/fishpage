@@ -310,19 +310,25 @@ def test_index_size_dropdown_reflects_selected_grade(tmp_path):
     assert '<option value="M" selected' in html
 
 
-def test_index_has_auto_submitting_on_special_toggle_unchecked_by_default(tmp_path):
-    html = client(tmp_path).get("/").text
+def _on_special_input(html):
+    """The on-special checkbox's own <input> tag, so assertions scope to it alone and a
+    checked state on some unrelated control can't satisfy (or break) them."""
+    start = html.index('<input type="checkbox" name="on_special"')
+    return html[start : html.index(">", start) + 1]
 
-    # A checkbox bound to the query param, auto-submitting on change, off by default.
-    assert 'name="on_special"' in html
-    assert html.count("this.form.submit()") >= 1
-    assert "on_special" in html and " checked" not in html
+
+def test_index_has_auto_submitting_on_special_toggle_unchecked_by_default(tmp_path):
+    tag = _on_special_input(client(tmp_path).get("/").text)
+
+    # The on-special input auto-submits on change and is off by default.
+    assert "this.form.submit()" in tag
+    assert "checked" not in tag
 
 
 def test_index_on_special_toggle_is_checked_when_active(tmp_path):
-    html = client(tmp_path).get("/", params={"on_special": "true"}).text
+    tag = _on_special_input(client(tmp_path).get("/", params={"on_special": "true"}).text)
 
-    assert " checked" in html
+    assert "checked" in tag
 
 
 def test_index_has_auto_submitting_sort_dropdown(tmp_path):
