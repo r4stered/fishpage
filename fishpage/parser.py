@@ -60,8 +60,9 @@ def parse_stocklist(path: str | Path) -> list[Item]:
                     item = _row_to_item(words)
                 except (IndexError, ValueError, InvalidOperation) as exc:
                     skipped += 1
-                    _log.warning("Skipping unparseable Stocklist row for SKU %s: %s",
-                                 words[0]["text"], exc)
+                    _log.warning(
+                        "Skipping unparseable Stocklist row for SKU %s: %s", words[0]["text"], exc
+                    )
                     continue
                 if item is not None:
                     items.append(item)
