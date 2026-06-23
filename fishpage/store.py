@@ -36,8 +36,23 @@ def open_store(path: str | Path) -> sqlite3.Connection:
     conn = sqlite3.connect(path, check_same_thread=False)
     conn.row_factory = sqlite3.Row
     conn.execute(_SCHEMA)
+    _migrate(conn)
     conn.commit()
     return conn
+
+
+def _migrate(conn: sqlite3.Connection) -> None:
+    """Bring an existing items table up to the current schema.
+
+    The store is persistent and never rebuilt, so a database created by an earlier
+    version predates columns added later. ``CREATE TABLE IF NOT EXISTS`` leaves such a
+    table untouched, so each additive column is backfilled here. ``ADD COLUMN`` with a
+    default backfills existing rows, so a row from before the reuse guard reads as
+    not-flagged.
+    """
+    columns = {row["name"] for row in conn.execute("PRAGMA table_info(items)")}
+    if "reuse_flagged" not in columns:
+        conn.execute("ALTER TABLE items ADD COLUMN reuse_flagged INTEGER NOT NULL DEFAULT 0")
 
 
 def reconcile(conn: sqlite3.Connection, items: list[Item], stocklist_date: date) -> None:
