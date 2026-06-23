@@ -2,6 +2,8 @@ from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
 
+from fishpage.category import derive_category
+
 
 @dataclass(frozen=True)
 class Item:
@@ -27,3 +29,8 @@ class Item:
     qty_avail: int
     last_seen: date | None = None
     reuse_flagged: bool = False
+
+    @property
+    def category(self) -> str:
+        """The Derived Category, computed purely from the SKU and name — never stored."""
+        return derive_category(self.sku, self.name)

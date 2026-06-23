@@ -13,10 +13,21 @@ ORNATE_M = Item("110042", "M", "Bichir Ornate", Decimal("28.99"), None, 15)
 LEAF = Item("110092", "-", "Leaf Fish Leopard Ctenopoma", Decimal("5.99"), Decimal("4.99"), 30)
 SOLD_OUT = Item("110200", "L", "Datnoid Indo", Decimal("89.99"), None, 0)
 
+# Items spanning distinct Derived Categories, for the category-filter tests.
+# ORNATE_M and LEAF are both block-11 Monster/Oddball.
+ANGEL = Item("120091", "S", "Angelfish Full Black", Decimal("9.99"), None, 12)
+BARB = Item("170011", "-", "Barb Cherry", Decimal("3.99"), None, 40)
+
 
 def client(tmp_path):
     conn = open_store(tmp_path / "fishpage.db")
     reconcile(conn, [ORNATE_M, LEAF, SOLD_OUT], JUN19)
+    return TestClient(create_app(conn))
+
+
+def categorized_client(tmp_path):
+    conn = open_store(tmp_path / "fishpage.db")
+    reconcile(conn, [ORNATE_M, LEAF, ANGEL, BARB], JUN19)
     return TestClient(create_app(conn))
 
 
@@ -36,6 +47,7 @@ def test_catalog_defaults_to_in_stock_with_shape(tmp_path):
         "retail_price": "28.99",
         "special_price": None,
         "qty_avail": 15,
+        "category": "Monster/Oddball",
     }
     assert items["110092"]["special_price"] == "4.99"
 
@@ -117,3 +129,62 @@ def test_index_renders_one_card_per_item(tmp_path):
 
     # The special price appears only on the row that has one.
     assert '<span class="special-price">special $4.99</span>' in html
+
+
+def test_catalog_json_carries_each_items_category(tmp_path):
+    items = {i["sku"]: i for i in categorized_client(tmp_path).get("/catalog").json()}
+
+    assert items["120091"]["category"] == "Angelfish"
+    assert items["110042"]["category"] == "Monster/Oddball"
+
+
+def test_catalog_filters_by_category(tmp_path):
+    resp = categorized_client(tmp_path).get("/catalog", params={"category": "Monster/Oddball"})
+
+    # Only the two block-11 oddballs come back; the Angelfish and Barb are excluded.
+    assert {i["sku"] for i in resp.json()} == {"110042", "110092"}
+
+
+def test_index_has_auto_submitting_category_dropdown(tmp_path):
+    html = categorized_client(tmp_path).get("/").text
+
+    # A select bound to the query param, auto-submitting on change, with an option per
+    # present category plus an empty "all categories" default.
+    assert '<select name="category" onchange="this.form.submit()"' in html
+    assert '<option value="">' in html
+    assert '<option value="Angelfish"' in html
+    assert '<option value="Barb"' in html
+    assert '<option value="Monster/Oddball"' in html
+
+
+def test_index_category_and_stock_controls_share_one_form(tmp_path):
+    # Both controls live in a single form, so changing one preserves the other's state.
+    html = categorized_client(tmp_path).get("/").text
+
+    assert html.count("<form") == 1
+    assert 'name="include_out_of_stock"' in html
+    assert 'name="category"' in html
+
+
+def test_index_filters_grid_by_category(tmp_path):
+    html = categorized_client(tmp_path).get("/", params={"category": "Barb"}).text
+
+    assert 'data-sku="170011"' in html  # the Barb
+    assert 'data-sku="120091"' not in html  # Angelfish excluded
+    assert 'data-sku="110042"' not in html  # oddball excluded
+    # The chosen category is reflected as the selected option.
+    assert '<option value="Barb" selected' in html
+
+
+def test_index_dropdown_lists_categories_independent_of_stock_filter(tmp_path):
+    # A category whose only Item is out of stock must still be selectable in the
+    # dropdown, even in the default in-stock-only view — otherwise it could never be
+    # browsed to. Most of the stocklist is out of stock at any time.
+    conn = open_store(tmp_path / "fishpage.db")
+    oos_eel = Item("150013", "Jumbo", "Eel Fire", Decimal("19.99"), None, 0)
+    reconcile(conn, [ANGEL, oos_eel], JUN19)
+
+    html = TestClient(create_app(conn)).get("/").text  # default: in-stock only
+
+    assert '<option value="Eel"' in html  # offered despite having no in-stock Item
+    assert 'data-sku="150013"' not in html  # but its card stays hidden until toggled
