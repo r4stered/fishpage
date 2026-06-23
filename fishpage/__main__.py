@@ -29,7 +29,8 @@ def build_app():
     db_path = Path(os.environ.get("FISHPAGE_DB", _DEFAULT_DB))
     incoming = Path(os.environ.get("INCOMING_DIR", _DEFAULT_INCOMING))
     processed = Path(os.environ.get("PROCESSED_DIR", _DEFAULT_PROCESSED))
-    interval = float(os.environ.get("INGEST_POLL_SECONDS", "30"))
+    # Floor the poll interval: a zero or negative override would busy-loop the watcher.
+    interval = max(1.0, float(os.environ.get("INGEST_POLL_SECONDS", "30")))
 
     db_path.unlink(missing_ok=True)  # fresh DB each start
     conn = open_store(db_path)

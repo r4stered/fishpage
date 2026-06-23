@@ -8,6 +8,7 @@ polling loop that drives it on a mounted volume today.
 
 import logging
 import re
+import shutil
 import sqlite3
 import time
 from datetime import date
@@ -23,8 +24,13 @@ def ingest_pending(conn: sqlite3.Connection, incoming_dir: Path, processed_dir: 
     """Reconcile every Stocklist PDF currently in ``incoming_dir`` into the catalog.
 
     Each PDF is parsed and reconciled (the single upsert-by-SKU path), then moved to
-    ``processed_dir`` so a later scan won't re-ingest it. Returns the dropped paths
-    ingested, in processing order.
+    ``processed_dir`` so a later scan won't re-ingest it. Returns the source paths ingested,
+    in processing order — each has already been moved, so it now lives under ``processed_dir``,
+    not at the returned location.
+
+    A parse that yields no Items is treated as an incomplete drop, not an empty Stocklist:
+    it is skipped and left in ``incoming_dir`` for a later retry rather than reconciled, since
+    reconciling nothing would zero every SKU in the catalog.
     """
     processed_dir.mkdir(parents=True, exist_ok=True)
     # Reconcile oldest-first so the newest Stocklist lands last: reconcile zeroes absentees
@@ -34,8 +40,15 @@ def ingest_pending(conn: sqlite3.Connection, incoming_dir: Path, processed_dir: 
     ingested: list[Path] = []
     for pdf in pending:
         items = parse_stocklist(pdf)
+        if not items:
+            _log.warning(
+                "Parsed no Items from %s; leaving it for retry (incomplete copy?).", pdf.name
+            )
+            continue
         reconcile(conn, items, stocklist_date(pdf))
-        pdf.rename(processed_dir / pdf.name)
+        # shutil.move, not Path.rename: incoming and processed may sit on different mounts,
+        # where rename raises EXDEV. move falls back to copy+delete across devices.
+        shutil.move(pdf, processed_dir / pdf.name)
         ingested.append(pdf)
     return ingested
 
@@ -50,18 +63,28 @@ def watch_incoming(
     """Poll ``incoming_dir`` forever, ingesting each Stocklist PDF as it lands.
 
     Polling rather than filesystem events is deliberate: the incoming folder is a mounted
-    volume where inotify is unreliable, and a nightly drop has no latency requirement. A pass
-    that fails — e.g. a PDF still being copied in — is logged and retried on the next tick,
-    so the partially-written file is simply picked up once it has settled.
+    volume where inotify is unreliable, and a nightly drop has no latency requirement. A drop
+    still being copied in is handled on the next tick: if its PDF cannot yet be opened the pass
+    raises and is logged, and if it opens but parses to no rows it is skipped — either way the
+    file stays in ``incoming_dir`` and is picked up once it has settled.
     """
     incoming_dir.mkdir(parents=True, exist_ok=True)
     while True:
-        try:
-            for pdf in ingest_pending(conn, incoming_dir, processed_dir):
-                _log.info("Ingested Stocklist %s", pdf.name)
-        except Exception:
-            _log.exception("Ingestion pass failed; retrying on next poll")
+        _ingest_pass(conn, incoming_dir, processed_dir)
         time.sleep(interval)
+
+
+def _ingest_pass(conn: sqlite3.Connection, incoming_dir: Path, processed_dir: Path) -> None:
+    """One watcher iteration: ingest pending drops, surviving any failure to the next poll.
+
+    A failed pass (e.g. a PDF still being copied in that cannot be opened yet) is logged and
+    swallowed so the loop keeps polling and the file is retried once it has settled.
+    """
+    try:
+        for pdf in ingest_pending(conn, incoming_dir, processed_dir):
+            _log.info("Ingested Stocklist %s", pdf.name)
+    except Exception:
+        _log.exception("Ingestion pass failed; retrying on next poll")
 
 
 def stocklist_date(pdf_path: Path) -> date:

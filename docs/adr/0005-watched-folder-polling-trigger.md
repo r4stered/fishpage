@@ -18,9 +18,18 @@ is unreliable across the mount boundary and can silently drop events — and a m
 once-a-night drop means the catalog silently goes stale, the worst failure mode here. A nightly drop has
 no latency requirement, so polling's only real cost (seconds of delay) does not matter.
 
-Polling also makes **partial writes** self-correcting. A still-copying PDF fails to parse; the pass logs
-the failure and leaves the file in `incoming`, so the next tick retries once the copy has settled. The
-loop therefore swallows per-pass errors by design rather than dying on a half-written or malformed file.
+Polling also makes **partial writes** self-correcting, within the limits of what the parser can detect. A
+still-copying PDF that cannot yet be opened raises; the pass logs it and leaves the file in `incoming`, so
+the next tick retries once the copy has settled. The loop swallows per-pass errors by design rather than
+dying on a half-written or malformed file.
+
+A subtler case is a file that *opens* but is incomplete. The parser returns the rows it could extract, not
+a raise, so a truncated drop can parse to a short list — and reconciling an empty list would zero every SKU
+in the catalog. To stop that, `ingest_pending` treats a **no-row parse as an incomplete drop**: it is
+skipped and left in `incoming` for retry, never reconciled. This is a guard against the catastrophic
+zero-row case, not a completeness check — a truncated PDF that yields a *partial* (non-empty) row set would
+still reconcile, briefly zeroing the SKUs missing from the fragment until the next full drop. Detecting
+partial extraction belongs with parser resilience, not the trigger.
 
 This is reversible: because the trigger is a few lines over `ingest_pending`, swapping in event-driven
 or HTTP-driven triggering touches no tested code. A move to cloud object storage would not reuse a local
@@ -41,10 +50,13 @@ key must be the parsed date.
 
 - No new dependency: polling uses the standard library, where `watchdog` would have added one.
 - The watcher shares the connection the app serves from, so a drop is reflected in the live catalog
-  without a restart.
-- A *permanently* malformed PDF is retried every tick forever and never leaves `incoming`. Distinguishing
-  "still copying" from "broken" is deferred to the parser-resilience work; until then a broken drop is
-  noisy in the logs but harmless to the catalog.
+  without a restart. That makes a request handler a concurrent reader against the ingestion writer; the
+  brief half-reconciled read window this opens is accepted as-is for a low-traffic internal tool.
+- A *permanently* unparseable PDF — one that always raises, or always parses to zero rows — is retried
+  every tick forever and never leaves `incoming`. Distinguishing "still copying" from "broken" is deferred
+  to the parser-resilience work; until then a broken drop is noisy in the logs but harmless to the catalog.
+- Files are moved with `shutil.move`, not `Path.rename`, so `incoming` and `processed` may sit on
+  different mounts without an `EXDEV` failure.
 - "Absent" is defined by run date in reconciliation, so a real run needs a distinct date per Stocklist —
   the same constraint the upsert-and-never-delete design already carries (see
   [ADR 0001](0001-sku-permanent-key-upsert-never-delete.md)).
