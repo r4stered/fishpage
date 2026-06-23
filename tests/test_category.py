@@ -41,6 +41,14 @@ def test_unknown_block_falls_back_to_the_leading_name_word():
     assert derive_category("990001", "Wobbegong Spotted") == "Wobbegong"
 
 
+def test_unknown_block_with_empty_name_falls_back_without_crashing():
+    # A data anomaly — uncurated SKU prefix and no name to read a leading word from.
+    # There is no signal to categorize on, so it lands in the catch-all rather than
+    # raising.
+    assert derive_category("990001", "") == "Monster/Oddball"
+    assert derive_category("990001", "   ") == "Monster/Oddball"
+
+
 def test_heterogeneous_blocks_are_monster_oddball():
     # Blocks 11, 14 and 45 each mix unrelated oddballs under one block, so no single
     # leading name word names the block — they all collapse to Monster/Oddball.

@@ -45,8 +45,13 @@ def create_app(conn: sqlite3.Connection) -> FastAPI:
 
     @app.get("/", response_class=HTMLResponse)
     def index(include_out_of_stock: bool = False, category: str | None = None) -> HTMLResponse:
-        items = all_items(conn, include_out_of_stock=include_out_of_stock)
-        categories = sorted({item.category for item in all_items(conn)})
+        # Load the whole catalog once: the dropdown lists every category regardless of the
+        # active filters, so narrowing to In stock in SQL would force a second read for the
+        # vocabulary. Both view filters are applied in process instead.
+        items = all_items(conn, include_out_of_stock=True)
+        categories = sorted({item.category for item in items})
+        if not include_out_of_stock:
+            items = [item for item in items if item.qty_avail > 0]
         items = _by_category(items, category)
         return HTMLResponse(
             render_catalog(

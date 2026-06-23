@@ -54,4 +54,5 @@ def derive_category(sku: str, name: str) -> str:
     block = _CATEGORY_BY_BLOCK.get(sku[:2])
     if block is not None:
         return block
-    return name.split()[0]
+    leading_word = name.split()
+    return leading_word[0] if leading_word else _MONSTER_ODDBALL

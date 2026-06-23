@@ -174,3 +174,17 @@ def test_index_filters_grid_by_category(tmp_path):
     assert 'data-sku="110042"' not in html  # oddball excluded
     # The chosen category is reflected as the selected option.
     assert '<option value="Barb" selected' in html
+
+
+def test_index_dropdown_lists_categories_independent_of_stock_filter(tmp_path):
+    # A category whose only Item is out of stock must still be selectable in the
+    # dropdown, even in the default in-stock-only view — otherwise it could never be
+    # browsed to. Most of the stocklist is out of stock at any time.
+    conn = open_store(tmp_path / "fishpage.db")
+    oos_eel = Item("150013", "Jumbo", "Eel Fire", Decimal("19.99"), None, 0)
+    reconcile(conn, [ANGEL, oos_eel], JUN19)
+
+    html = TestClient(create_app(conn)).get("/").text  # default: in-stock only
+
+    assert '<option value="Eel"' in html  # offered despite having no in-stock Item
+    assert 'data-sku="150013"' not in html  # but its card stays hidden until toggled
