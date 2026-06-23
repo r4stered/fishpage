@@ -1,5 +1,7 @@
 # fishpage
 
+[![codecov](https://codecov.io/github/r4stered/fishpage/graph/badge.svg?token=GCF1B15WGZ)](https://codecov.io/github/r4stered/fishpage)
+
 An internal browsing tool that turns Sea Dwelling Creatures' (SDC) freshwater wholesale
 **Stocklist** PDF into a searchable, filterable, sortable catalog — used to decide what
 livestock to order. Not a public storefront.

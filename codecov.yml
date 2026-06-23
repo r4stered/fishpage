@@ -1,0 +1,10 @@
+# Coverage is visibility-only: Codecov annotates PRs but never fails a check.
+# `informational: true` reports the project and patch coverage without gating merges.
+coverage:
+  status:
+    project:
+      default:
+        informational: true
+    patch:
+      default:
+        informational: true
