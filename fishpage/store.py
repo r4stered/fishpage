@@ -61,12 +61,18 @@ def reconcile(conn: sqlite3.Connection, items: list[Item], stocklist_date: date)
             for item in items
         ],
     )
-    present = [item.sku for item in items]
-    placeholders = ",".join("?" * len(present))
+    # An absentee is exactly a row the upsert above did NOT just stamp with this run's
+    # date, so "absent" is "last_seen is not stocklist_date" — one bound parameter rather
+    # than one per present SKU, which keeps us clear of SQLITE_MAX_VARIABLE_NUMBER (999 on
+    # SQLite builds before 3.32) no matter how large the Stocklist grows. Absent SKUs are
+    # zeroed, never deleted, and keep their last_seen (ADR-0001).
+    #
+    # Tradeoff: this defines "absent" by date, not set membership, so re-running reconcile
+    # twice with the *same* stocklist_date will not re-zero the first run's absentees (they
+    # already carry that date). A degenerate case — real runs use a distinct date each night.
     conn.execute(
-        # Absent SKUs are zeroed, never deleted, and keep their last_seen (ADR-0001).
-        f"UPDATE items SET qty_avail = 0 WHERE sku NOT IN ({placeholders})",
-        present,
+        "UPDATE items SET qty_avail = 0 WHERE last_seen IS NOT ?",
+        (stocklist_date.isoformat(),),
     )
     conn.commit()
 
