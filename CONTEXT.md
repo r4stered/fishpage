@@ -27,7 +27,14 @@ The date an Item's SKU last appeared in a Stocklist. Distinguishes "out of stock
 (recent Last seen, qty 0) from "probably discontinued" (Last seen months ago).
 
 **Size**:
-The supplier's size grade for an Item: one of `-` (unspecified), `S`, `M`, `L`, `Jumbo`.
+The supplier's value in the Stocklist's `SIZE` column. For **livestock** Items it is a size
+grade — one of `-` (unspecified), `S`, `M`, `L`, `Jumbo`. But the same column is overloaded:
+for plants and dry goods it instead carries a **packaging unit** (`POTTED`, `BUNCH`, `w/weight`,
+`ON MAT`, `12 PC CASE`, `1/2 SQ. FT.`, …) — not a size grade at all. Which interpretation applies
+is tied to the Item's Derived Category (the size grades describe fish; the units describe everything
+else). We store the raw column token verbatim (a blank cell becomes `-`); turning it into a clean,
+category-aware grade-or-unit is deferred — see `docs/adr/0002-size-column-is-overloaded.md`.
+_Avoid_: assuming `size` is always one of the five grades — most rows are, but plant/dry-goods rows are not.
 
 **Retail price**:
 The price as printed in the stocklist's `retail_price` column. Despite the name, this is the

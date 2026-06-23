@@ -24,6 +24,19 @@ Python (managed with [uv](https://docs.astral.sh/uv/)) · FastAPI · pdfplumber 
 Deploys as a single Docker container on Unraid, with the SQLite database and the watched
 incoming folder on mounted volumes.
 
+## Run it
+
+```sh
+uv run fishpage        # parses the sample Stocklist into a fresh SQLite catalog and serves it
+```
+
+Then open <http://127.0.0.1:8000/> for the catalog grid, or `GET /catalog` for JSON.
+Run the tests with `uv run pytest`.
+
+The walking skeleton rebuilds the catalog from the committed sample PDF
+(`tests/fixtures/Freshwater_Stocklist_6-19-26.pdf`) on every start. Point it at another PDF
+with `STOCKLIST_PDF=/path/to.pdf uv run fishpage`.
+
 ## Project docs
 
 - [`CONTEXT.md`](CONTEXT.md) — domain glossary. Use this vocabulary throughout.
@@ -33,9 +46,11 @@ incoming folder on mounted volumes.
 
 ## Status
 
-Pre-implementation. The design is published as PRD
-[#1](https://github.com/r4stered/fishpage/issues/1), broken into slices #2–#10. Start with
-[#2 (walking skeleton)](https://github.com/r4stered/fishpage/issues/2).
+Walking skeleton ([#2](https://github.com/r4stered/fishpage/issues/2)) landed: the sample
+Stocklist parses into SQLite and renders as an unstyled grid of Item cards. Ingestion is a
+plain insert into a fresh DB for now — the upsert-by-SKU reconciliation, search/filter/sort,
+and watched folder are later slices (#3–#10) of PRD
+[#1](https://github.com/r4stered/fishpage/issues/1).
 
 ## Out of scope (deferred to phase 2)
 

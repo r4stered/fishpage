@@ -8,9 +8,13 @@ See `CONTEXT.md` for the domain language.
 
 Issues and PRDs live in this repo's GitHub Issues (`r4stered/fishpage`), via the `gh` CLI. See `docs/agents/issue-tracker.md`.
 
+### Branch & PR workflow
+
+One branch per issue, merged via a PR that closes the issue with a `Closes #<n>` keyword. `main` stays green. See `docs/agents/branch-workflow.md`.
+
 ### Triage labels
 
-Canonical triage label strings (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`). See `docs/agents/triage-labels.md`.
+Canonical triage label strings (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`), the default assignee (`r4stered`), and the one-category + one-state labelling rule. See `docs/agents/triage-labels.md`.
 
 ### Domain docs
 
