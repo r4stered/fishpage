@@ -2,11 +2,12 @@
 
 Each night's Stocklist PDF is the supplier's current truth, and the obvious design is to mirror
 it exactly — delete any Item whose SKU is absent. We deliberately don't. Ingestion upserts by SKU
-and sets `qty_avail = 0` for SKUs missing from that night's list, keeping the Item with its
-`last_seen` date, image, and Classifiers intact. The reason is that enrichment (images + care
-Classifiers) is an investment we accumulate per Item over time, and items routinely stock out and
+and sets `qty_avail = 0` for SKUs missing from that night's list, keeping the Item and its
+`last_seen` date intact. The reason is enrichment: the image and care Classifiers we will accumulate
+per Item in phase 2 are an investment that builds up over time, and items routinely stock out and
 return; mirroring the PDF would discard that work on every stock-out and re-create the item later
-as if brand new.
+as if brand new. The enrichment fields are not in the v1 schema, but the never-delete rule is set
+now so phase 2 has the stable, long-lived Item rows to hang that work on.
 
 ## Consequences
 
