@@ -22,7 +22,15 @@ def _item_dict(item: Item) -> dict:
         "retail_price": str(item.retail_price),
         "special_price": None if item.special_price is None else str(item.special_price),
         "qty_avail": item.qty_avail,
+        "category": item.category,
     }
+
+
+def _by_category(items: list[Item], category: str | None) -> list[Item]:
+    # The dropdown's "all categories" option submits an empty string, which means no filter.
+    if not category:
+        return items
+    return [item for item in items if item.category == category]
 
 
 def create_app(conn: sqlite3.Connection) -> FastAPI:
@@ -30,13 +38,23 @@ def create_app(conn: sqlite3.Connection) -> FastAPI:
     app.mount("/static", StaticFiles(directory=_STATIC), name="static")
 
     @app.get("/catalog")
-    def catalog(include_out_of_stock: bool = False) -> JSONResponse:
+    def catalog(include_out_of_stock: bool = False, category: str | None = None) -> JSONResponse:
         items = all_items(conn, include_out_of_stock=include_out_of_stock)
+        items = _by_category(items, category)
         return JSONResponse([_item_dict(item) for item in items])
 
     @app.get("/", response_class=HTMLResponse)
-    def index(include_out_of_stock: bool = False) -> HTMLResponse:
+    def index(include_out_of_stock: bool = False, category: str | None = None) -> HTMLResponse:
         items = all_items(conn, include_out_of_stock=include_out_of_stock)
-        return HTMLResponse(render_catalog(items, include_out_of_stock=include_out_of_stock))
+        categories = sorted({item.category for item in all_items(conn)})
+        items = _by_category(items, category)
+        return HTMLResponse(
+            render_catalog(
+                items,
+                include_out_of_stock=include_out_of_stock,
+                categories=categories,
+                selected_category=category,
+            )
+        )
 
     return app
