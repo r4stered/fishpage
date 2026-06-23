@@ -136,11 +136,19 @@ def _is_reuse(stored_name: str | None, incoming_name: str) -> bool:
     return _normalize_name(stored_name) != _normalize_name(incoming_name)
 
 
-def all_items(conn: sqlite3.Connection) -> list[Item]:
-    rows = conn.execute(
+def all_items(conn: sqlite3.Connection, *, include_out_of_stock: bool = True) -> list[Item]:
+    """Read every stored Item, newest schema columns included.
+
+    With ``include_out_of_stock=False`` the result is narrowed to In stock Items
+    (``qty_avail > 0``); the filter runs in SQL so zeroed rows are never loaded.
+    """
+    query = (
         "SELECT sku, size, name, retail_price, special_price, qty_avail, last_seen, "
         "reuse_flagged FROM items"
-    ).fetchall()
+    )
+    if not include_out_of_stock:
+        query += " WHERE qty_avail > 0"
+    rows = conn.execute(query).fetchall()
     return [_row_to_item(row) for row in rows]
 
 

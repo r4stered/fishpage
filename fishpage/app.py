@@ -30,11 +30,13 @@ def create_app(conn: sqlite3.Connection) -> FastAPI:
     app.mount("/static", StaticFiles(directory=_STATIC), name="static")
 
     @app.get("/catalog")
-    def catalog() -> JSONResponse:
-        return JSONResponse([_item_dict(item) for item in all_items(conn)])
+    def catalog(include_out_of_stock: bool = False) -> JSONResponse:
+        items = all_items(conn, include_out_of_stock=include_out_of_stock)
+        return JSONResponse([_item_dict(item) for item in items])
 
     @app.get("/", response_class=HTMLResponse)
-    def index() -> HTMLResponse:
-        return HTMLResponse(render_catalog(all_items(conn)))
+    def index(include_out_of_stock: bool = False) -> HTMLResponse:
+        items = all_items(conn, include_out_of_stock=include_out_of_stock)
+        return HTMLResponse(render_catalog(items, include_out_of_stock=include_out_of_stock))
 
     return app

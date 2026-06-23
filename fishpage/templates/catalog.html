@@ -6,6 +6,13 @@
 </head>
 <body>
   <h1>Catalog</h1>
+  <form class="stock-toggle" method="get" action="/">
+    <label>
+      <input type="checkbox" name="include_out_of_stock" value="true"
+             onchange="this.form.submit()"{% if include_out_of_stock %} checked{% endif %}>
+      Include out of stock
+    </label>
+  </form>
   <p>{{ items|length }} Items</p>
   <ul class="catalog-grid">
     {% for item in items %}
