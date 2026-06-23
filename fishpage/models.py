@@ -1,6 +1,5 @@
 from dataclasses import dataclass
 from decimal import Decimal
-from typing import Optional
 
 
 @dataclass(frozen=True)
@@ -15,5 +14,5 @@ class Item:
     size: str
     name: str
     retail_price: Decimal
-    special_price: Optional[Decimal]
+    special_price: Decimal | None
     qty_avail: int

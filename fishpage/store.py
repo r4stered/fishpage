@@ -8,7 +8,6 @@ later slice.
 import sqlite3
 from decimal import Decimal
 from pathlib import Path
-from typing import Optional
 
 from fishpage.models import Item
 
@@ -61,7 +60,7 @@ def all_items(conn: sqlite3.Connection) -> list[Item]:
 
 
 def _row_to_item(row: sqlite3.Row) -> Item:
-    special: Optional[Decimal] = (
+    special: Decimal | None = (
         None if row["special_price"] is None else Decimal(row["special_price"])
     )
     return Item(
