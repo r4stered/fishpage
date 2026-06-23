@@ -32,7 +32,7 @@ packages = ["fishpage"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = ["--cov=fishpage", "--cov-report=term-missing", "--cov-report=xml"]
+addopts = ["-p", "pytest_cov", "--cov=fishpage", "--cov-report=term-missing", "--cov-report=xml"]
 
 [tool.ruff]
 target-version = "py314"
