@@ -14,7 +14,7 @@ One branch per issue, merged via a PR that closes the issue with a `Closes #<n>`
 
 ### Triage labels
 
-Canonical triage label strings (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`). See `docs/agents/triage-labels.md`.
+Canonical triage label strings (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`), the default assignee (`r4stered`), and the one-category + one-state labelling rule. See `docs/agents/triage-labels.md`.
 
 ### Domain docs
 

@@ -14,6 +14,37 @@ When a skill mentions a role (e.g. "apply the AFK-ready triage label"), use the 
 
 Edit the right-hand column to match whatever vocabulary you actually use.
 
+## Default assignee
+
+The maintainer is **`r4stered`** (Drew Williams). Assign issues to them by default — both when
+creating an issue and when triaging one — unless explicitly told otherwise:
+
+```sh
+gh issue create ... --assignee r4stered     # or --assignee @me when the maintainer runs it
+gh issue edit <number> --add-assignee r4stered
+```
+
+## Applying labels
+
+Every triaged issue carries **exactly one category role and one state role** — never zero, never
+two of either:
+
+- **Category** (one of): `bug`, `enhancement`.
+- **State** (one of): `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`.
+
+Apply both together:
+
+```sh
+gh issue edit <number> --add-label enhancement --add-label ready-for-agent
+```
+
+On a **state transition**, remove the old state label in the same call so the two don't coexist
+(category rarely changes; state moves through the machine):
+
+```sh
+gh issue edit <number> --add-label ready-for-agent --remove-label needs-triage
+```
+
 These labels don't exist in the GitHub repo yet. Create them on first use with, e.g.:
 
 ```sh
