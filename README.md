@@ -94,13 +94,14 @@ toggle ([#5](https://github.com/r4stered/fishpage/issues/5)), the Derived Catego
 ([#6](https://github.com/r4stered/fishpage/issues/6)), fuzzy name search
 ([#7](https://github.com/r4stered/fishpage/issues/7)), the Size/on-special filters and
 effective-price sort ([#8](https://github.com/r4stered/fishpage/issues/8)), the
-CI / dev-tooling gate ([#14](https://github.com/r4stered/fishpage/issues/14)), and
-watched-folder ingestion ([#9](https://github.com/r4stered/fishpage/issues/9)).
+CI / dev-tooling gate ([#14](https://github.com/r4stered/fishpage/issues/14)),
+watched-folder ingestion ([#9](https://github.com/r4stered/fishpage/issues/9)), and parser
+row resilience — skip-and-log malformed rows + SKU-shape validation
+([#12](https://github.com/r4stered/fishpage/issues/12)).
 
 Remaining v1 slices: containerization with a persistent
-volume ([#10](https://github.com/r4stered/fishpage/issues/10)), and parser resilience for
-varied layouts and malformed rows
-([#12](https://github.com/r4stered/fishpage/issues/12), [#13](https://github.com/r4stered/fishpage/issues/13)).
+volume ([#10](https://github.com/r4stered/fishpage/issues/10)), and robust column detection
+for varied Stocklist layouts ([#13](https://github.com/r4stered/fishpage/issues/13)).
 
 ## Out of scope (deferred to phase 2)
 

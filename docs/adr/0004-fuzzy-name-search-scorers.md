@@ -1,4 +1,4 @@
-# Fuzzy name search: filter by per-token partial ratio, then rank survivors by whole-name WRatio
+# Fuzzy name search: filter by per-token partial ratio, then rank survivors by whole-name token_sort_ratio
 
 Name search has to be approximate and order-independent — the motivating case is `"angel koi"`
 finding `"Angelfish Koi"`, where each query word only partially spells a name word and the order
