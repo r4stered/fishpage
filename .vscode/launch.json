@@ -1,6 +1,4 @@
 {
-  // Debug configurations (F5). These run the app/tests directly in the
-  // .venv interpreter so breakpoints work — for plain runs, prefer the tasks.
   "version": "0.2.0",
   "configurations": [
     {

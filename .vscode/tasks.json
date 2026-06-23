@@ -1,7 +1,4 @@
 {
-  // Tasks wrap the justfile recipes — the single source of truth for CI,
-  // pre-commit, humans, and agents. Run via "Tasks: Run Task" (⇧⌘B for the
-  // default build task). Each recipe is invoked with `uv run just <recipe>`.
   "version": "2.0.0",
   "tasks": [
     {
