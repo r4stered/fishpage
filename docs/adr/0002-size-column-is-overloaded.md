@@ -8,11 +8,11 @@ the same column — `w/weight` (39), `POTTED` (19), `XL` (8), `ON MAT` (6), `BUN
 `12 PC CASE` (2), `Half Bag`, `POSTER`, `1/2 SQ. FT.` — plus 22 rows where the cell is blank.
 
 A size grade describes a fish; a packaging unit describes a bunch of plants or a case of dry goods.
-Whether a given token is a grade or a unit therefore depends on the Item's Derived Category, which the
-walking skeleton does not yet compute. Rather than coerce (and lose) the non-grade tokens, or pretend
-`size` is a five-value enum it demonstrably is not, the parser stores the **raw column token verbatim**
-(a blank cell becomes `-`). Interpreting it — splitting grade from unit once Derived Category exists —
-is left to a later slice.
+Whether a given token is a grade or a unit therefore depends on the Item's Derived Category. Rather
+than coerce (and lose) the non-grade tokens, or pretend `size` is a five-value enum it demonstrably is
+not, the parser stores the **raw column token verbatim** (a blank cell becomes `-`). Derived Category
+is now computed, but applying it to the `size` token — splitting grade from unit — is still left to a
+later slice.
 
 ## Consequences
 
