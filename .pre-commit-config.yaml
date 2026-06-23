@@ -1,0 +1,19 @@
+# Fast pre-commit gate: lint, format, and type-check before a commit lands.
+# Tests are deliberately NOT here (too slow) — they run in CI only.
+# Run manually with: uvx pre-commit run --all-files
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.15.18
+    hooks:
+      - id: ruff-check
+        args: [--fix]
+      - id: ruff-format
+
+  - repo: local
+    hooks:
+      - id: ty
+        name: ty check
+        entry: uv run ty check
+        language: system
+        types: [python]
+        pass_filenames: false

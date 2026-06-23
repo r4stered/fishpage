@@ -8,7 +8,6 @@ x-coordinates, anchored to the header row's column positions.
 
 from decimal import Decimal
 from pathlib import Path
-from typing import Optional
 
 import pdfplumber
 
@@ -42,7 +41,7 @@ def _group_words_into_rows(words):
     return [sorted(by_top[t], key=lambda w: w["x0"]) for t in sorted(by_top)]
 
 
-def _row_to_item(words) -> Optional[Item]:
+def _row_to_item(words) -> Item | None:
     if not words or not words[0]["text"][0].isdigit():
         return None  # header / non-data line
 

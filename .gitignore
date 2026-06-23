@@ -3,7 +3,6 @@ __pycache__/
 *.py[cod]
 .venv/
 venv/
-.python-version
 # uv.lock IS committed — do not ignore it
 
 # Tooling caches

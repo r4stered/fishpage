@@ -1,0 +1,13 @@
+version: 2
+updates:
+  # Python dependencies resolved through uv.lock.
+  - package-ecosystem: "uv"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+
+  # The actions pinned in .github/workflows/.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"

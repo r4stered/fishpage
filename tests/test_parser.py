@@ -44,10 +44,10 @@ def test_blank_special_price_is_none():
 def test_each_size_grade_is_parsed():
     items = by_sku(parse_stocklist(FIXTURE))
 
-    assert items["110012"].size == "-"     # African Butterflyfish (unspecified)
-    assert items["120091"].size == "S"     # Angelfish Full Black
-    assert items["110042"].size == "M"     # Bichir Ornate
-    assert items["110043"].size == "L"     # Bichir Ornate
+    assert items["110012"].size == "-"  # African Butterflyfish (unspecified)
+    assert items["120091"].size == "S"  # Angelfish Full Black
+    assert items["110042"].size == "M"  # Bichir Ornate
+    assert items["110043"].size == "L"  # Bichir Ornate
     assert items["150013"].size == "Jumbo"  # Eel Fire
 
 
