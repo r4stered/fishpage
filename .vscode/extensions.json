@@ -1,0 +1,11 @@
+{
+  // Extensions VS Code will recommend when this workspace is opened.
+  "recommendations": [
+    "ms-python.python", // Python language support + debugger
+    "charliermarsh.ruff", // Ruff linting & formatting (matches pyproject + pre-commit)
+    "astral-sh.ty", // ty type checker (matches the CI `types` job)
+    "skellock.just", // syntax highlighting for the justfile
+    "tamasfe.even-better-toml", // pyproject.toml / *.toml editing
+    "redhat.vscode-yaml" // .pre-commit-config.yaml & GitHub workflow YAML
+  ]
+}

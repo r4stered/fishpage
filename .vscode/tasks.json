@@ -1,0 +1,66 @@
+{
+  // Tasks wrap the justfile recipes — the single source of truth for CI,
+  // pre-commit, humans, and agents. Run via "Tasks: Run Task" (⇧⌘B for the
+  // default build task). Each recipe is invoked with `uv run just <recipe>`.
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "install",
+      "detail": "Sync project + dev deps from uv.lock",
+      "type": "shell",
+      "command": "uv run just install",
+      "group": "build"
+    },
+    {
+      "label": "run",
+      "detail": "Serve the catalog at http://127.0.0.1:8000/",
+      "type": "shell",
+      "command": "uv run just run",
+      "group": "build",
+      "isBackground": true,
+      "problemMatcher": []
+    },
+    {
+      "label": "test",
+      "detail": "Run the pytest suite (CI `test` job)",
+      "type": "shell",
+      "command": "uv run just test",
+      "group": {
+        "kind": "test",
+        "isDefault": true
+      }
+    },
+    {
+      "label": "lint",
+      "detail": "Ruff lint + format check, no writes (CI `lint` job)",
+      "type": "shell",
+      "command": "uv run just lint",
+      "group": "test"
+    },
+    {
+      "label": "format",
+      "detail": "Auto-fix lint findings and reformat in place",
+      "type": "shell",
+      "command": "uv run just format",
+      "group": "none"
+    },
+    {
+      "label": "typecheck",
+      "detail": "Type-check with ty (CI `types` job)",
+      "type": "shell",
+      "command": "uv run just typecheck",
+      "group": "test"
+    },
+    {
+      "label": "check",
+      "detail": "Full local gate: lint + typecheck + test",
+      "type": "shell",
+      "command": "uv run just check",
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "problemMatcher": []
+    }
+  ]
+}

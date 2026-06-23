@@ -25,10 +25,10 @@ _QTY_LEFT = 450.0
 class DuplicateSkuError(ValueError):
     """A single parsed Stocklist named the same SKU on more than one row.
 
-    ADR-0001 keys permanently on SKU and CONTEXT.md states the same animal at two
-    sizes is two *distinct* SKUs, so this shouldn't happen — but if it did, the
-    store's ``ON CONFLICT(sku) DO UPDATE`` would silently keep only the last row.
-    We fail the parse instead so the data loss surfaces (see #21).
+    SKU is the permanent key and the same animal at two sizes is two *distinct*
+    SKUs, so this shouldn't happen — but if it did, the store's
+    ``ON CONFLICT(sku) DO UPDATE`` would silently keep only the last row. We fail
+    the parse instead so the data loss surfaces.
     """
 
 

@@ -1,0 +1,24 @@
+{
+  // Debug configurations (F5). These run the app/tests directly in the
+  // .venv interpreter so breakpoints work — for plain runs, prefer the tasks.
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Serve fishpage",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "fishpage",
+      "console": "integratedTerminal",
+      "justMyCode": false
+    },
+    {
+      "name": "Debug current test file",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "pytest",
+      "args": ["${file}", "-v"],
+      "console": "integratedTerminal",
+      "justMyCode": false
+    }
+  ]
+}
