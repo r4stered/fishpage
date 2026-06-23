@@ -3,6 +3,17 @@
 Each issue is delivered on its own branch and merged through a pull request that closes the
 issue. `main` stays green; work never lands directly on it.
 
+A ruleset on `main` enforces this: every PR must pass three required checks — `lint`, `types`,
+`test` — and `main` cannot be pushed to directly. Reproduce that gate locally with a single
+command before you push:
+
+```sh
+uv run just check     # lint + typecheck + test — the same gate CI runs
+```
+
+See the [Checks section of the README](../../README.md#checks) for the individual recipes and
+the optional pre-commit hooks.
+
 ## Steps
 
 1. **Branch off `main`**, named for the issue:
@@ -28,9 +39,10 @@ issue. `main` stays green; work never lands directly on it.
    Use `Refs #<n>` on intermediate commits. Save the closing keyword for the PR (step 5) so
    the issue closes on merge, not on the first commit.
 
-4. **Push** and set upstream:
+4. **Push** and set upstream. Run the gate first so CI doesn't bounce the PR:
 
    ```sh
+   uv run just check                              # must be green before pushing
    git push -u origin issue-<number>-<short-slug>
    ```
 
