@@ -2,7 +2,7 @@
 
 Run with ``uv run fishpage`` (or ``uv run python -m fishpage``). This is the walking-skeleton
 wiring — it rebuilds the catalog from the committed sample PDF on every start. Ingestion goes
-through :func:`reconcile`, the single upsert-by-SKU path (ADR-0001); the watched-folder trigger
+through :func:`reconcile`, the single upsert-by-SKU path; the watched-folder trigger
 is a later slice.
 """
 

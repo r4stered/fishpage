@@ -19,3 +19,7 @@ Canonical triage label strings (`needs-triage`, `needs-info`, `ready-for-agent`,
 ### Domain docs
 
 Single-context: `CONTEXT.md` + `docs/adr/` at the repo root. See `docs/agents/domain.md`.
+
+### Code comments
+
+Code comments and docstrings describe the **current state of the code only**. **Never** point a comment at an issue, ADR, PR, or `CONTEXT.md` (`see ADR-0001`, `# fixes #21`, `(see CONTEXT.md)`) — those references rot. State the constraint or reason directly instead. The paper trail lives in ADRs, `CONTEXT.md`, and Issues; docs may cross-link docs, but code references neither. See `docs/agents/code-comments.md`.

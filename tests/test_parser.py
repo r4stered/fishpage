@@ -15,7 +15,7 @@ def by_sku(items):
 
 def test_duplicate_sku_within_one_stocklist_is_rejected():
     # Two distinct rows claiming the same SKU — ON CONFLICT would silently keep only
-    # the last (ADR-0001 keys permanently on SKU; #21). The parse must fail loudly instead.
+    # the last, since SKU is the permanent key. The parse must fail loudly instead.
     ornate_m = Item("110042", "M", "Bichir Ornate", Decimal("28.99"), None, 15)
     ornate_l = Item("110042", "L", "Bichir Ornate", Decimal("49.99"), None, 4)
 
@@ -24,7 +24,7 @@ def test_duplicate_sku_within_one_stocklist_is_rejected():
 
 
 def test_distinct_skus_pass_the_guard():
-    # The same animal at two sizes is two distinct SKUs (CONTEXT.md) — that is allowed.
+    # The same animal at two sizes is two distinct SKUs — that is allowed.
     ornate_m = Item("110042", "M", "Bichir Ornate", Decimal("28.99"), None, 15)
     ornate_l = Item("110043", "L", "Bichir Ornate", Decimal("49.99"), None, 4)
 
@@ -80,7 +80,7 @@ def test_blank_size_becomes_dash_and_packaging_unit_is_kept_raw():
     assert glofish.name == "GloFish Cory Pink"
     assert glofish.size == "-"
 
-    # A plant row carries a packaging unit in the SIZE column; we keep it verbatim (ADR-0002).
+    # A plant row carries a packaging unit in the SIZE column; we keep it verbatim.
     micro_sword = items["757141"]
     assert micro_sword.name == "Micro Sword"
     assert micro_sword.size == "POTTED"

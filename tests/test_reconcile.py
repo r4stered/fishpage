@@ -1,4 +1,4 @@
-"""Ingestion reconciliation: upsert-by-SKU, advance last_seen, zero-out absentees (ADR 0001)."""
+"""Ingestion reconciliation: upsert-by-SKU, advance last_seen, zero-out absentees."""
 
 from datetime import date
 from decimal import Decimal
