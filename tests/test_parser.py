@@ -1,3 +1,4 @@
+import logging
 from decimal import Decimal
 from pathlib import Path
 
@@ -7,6 +8,7 @@ from fishpage.models import Item
 from fishpage.parser import DuplicateSkuError, check_unique_skus, parse_stocklist
 
 FIXTURE = Path(__file__).parent / "fixtures" / "Freshwater_Stocklist_6-19-26.pdf"
+MALFORMED = Path(__file__).parent / "fixtures" / "malformed_rows.pdf"
 
 
 def by_sku(items):
@@ -84,6 +86,69 @@ def test_blank_size_becomes_dash_and_packaging_unit_is_kept_raw():
     micro_sword = items["757141"]
     assert micro_sword.name == "Micro Sword"
     assert micro_sword.size == "POTTED"
+
+
+def test_a_malformed_row_is_skipped_not_fatal():
+    # A row that can't be parsed (missing column, non-numeric price) must not sink the
+    # whole batch — the good rows around it still parse.
+    items = by_sku(parse_stocklist(MALFORMED))
+
+    assert items["100001"].name == "Tetra Neon"
+    assert items["100001"].qty_avail == 10
+    assert items["100003"].name == "Pleco Gold"
+    assert items["100003"].special_price == Decimal("14.99")
+
+    # The malformed data rows are dropped rather than crashing or appearing half-parsed.
+    assert "100002" not in items  # missing qty column
+    assert "100004" not in items  # non-numeric retail price
+    assert "100006" not in items  # non-numeric qty
+
+
+def test_non_data_lines_are_not_parsed_as_items():
+    # A line whose first token merely starts with a digit (a printed date, a page-footer
+    # number) is not a data row. Row detection requires a full-length all-digit SKU, so these
+    # lines are dropped rather than minted into bogus Items.
+    items = by_sku(parse_stocklist(MALFORMED))
+
+    assert "6/19/26" not in items  # a date footer
+    assert "12345" not in items  # too short to be a SKU
+
+
+def test_non_numeric_quantity_is_skipped_not_fatal():
+    # A row whose qty cell isn't a number (a stray "CALL", a dash) can't yield a quantity —
+    # it is dropped like any other unparseable row rather than crashing the batch.
+    items = by_sku(parse_stocklist(MALFORMED))
+
+    assert "100006" not in items
+    assert items["100005"].name == "Arowana Super Red"  # the good row after it still parses
+
+
+def test_thousands_separator_in_price_is_parsed_not_skipped():
+    # A real high-priced Item prints its retail with a thousands separator. That comma is a
+    # display artifact, not a malformed row — the price parses and the row survives.
+    arowana = by_sku(parse_stocklist(MALFORMED))["100005"]
+
+    assert arowana.name == "Arowana Super Red"
+    assert arowana.retail_price == Decimal("1299.00")
+
+
+def test_skipped_rows_are_logged_with_sku_and_a_summary_count(caplog):
+    with caplog.at_level(logging.WARNING, logger="fishpage.parser"):
+        parse_stocklist(MALFORMED)
+
+    warnings = [r.getMessage() for r in caplog.records if r.levelno == logging.WARNING]
+
+    # Each unparseable data row is named individually by its SKU.
+    assert any("100002" in m for m in warnings)  # missing qty column
+    assert any("100004" in m for m in warnings)  # non-numeric price
+    assert any("100006" in m for m in warnings)  # non-numeric qty
+
+    # Non-data lines are ignored up front, not counted as skipped rows.
+    assert not any("6/19/26" in m for m in warnings)
+    assert not any("12345" in m for m in warnings)
+
+    # The batch surfaces how many rows it dropped.
+    assert any("skip" in m.lower() and "3" in m for m in warnings)
 
 
 def test_parses_every_row_with_unique_skus():
