@@ -5,12 +5,16 @@ present SKU and advances its ``last_seen``, zeroes the quantity of any SKU absen
 current Stocklist, and never deletes a row.
 """
 
+import logging
+import re
 import sqlite3
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
 
 from fishpage.models import Item
+
+_log = logging.getLogger(__name__)
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS items (
@@ -20,7 +24,8 @@ CREATE TABLE IF NOT EXISTS items (
     retail_price  TEXT NOT NULL,
     special_price TEXT,
     qty_avail     INTEGER NOT NULL,
-    last_seen     TEXT
+    last_seen     TEXT,
+    reuse_flagged INTEGER NOT NULL DEFAULT 0
 )
 """
 
@@ -40,15 +45,25 @@ def reconcile(conn: sqlite3.Connection, items: list[Item], stocklist_date: date)
 
     Each ``item`` present in this Stocklist is upserted by SKU and stamped with
     ``stocklist_date`` as its ``last_seen``. No row is ever deleted.
+
+    The reuse guard runs here: if a present SKU already exists under a materially
+    different name, its row is still updated (the catalog stays current) but the Item is
+    flagged for human review and the rename is logged. The flag is sticky — once raised it
+    stays raised across later runs, since v1 has no way to clear it after review.
     """
-    conn.executemany(
-        "INSERT INTO items (sku, size, name, retail_price, special_price, qty_avail, last_seen) "
-        "VALUES (:sku, :size, :name, :retail, :special, :qty, :last_seen) "
-        "ON CONFLICT(sku) DO UPDATE SET "
-        "size = excluded.size, name = excluded.name, retail_price = excluded.retail_price, "
-        "special_price = excluded.special_price, qty_avail = excluded.qty_avail, "
-        "last_seen = excluded.last_seen",
-        [
+    stored_names = {row["sku"]: row["name"] for row in conn.execute("SELECT sku, name FROM items")}
+    params = []
+    for item in items:
+        prior_name = stored_names.get(item.sku)
+        reuse = _is_reuse(prior_name, item.name)
+        if reuse:
+            _log.warning(
+                "Reuse guard: SKU %s reappeared as %r (was %r); flagged for review.",
+                item.sku,
+                item.name,
+                prior_name,
+            )
+        params.append(
             {
                 "sku": item.sku,
                 "size": item.size,
@@ -57,9 +72,19 @@ def reconcile(conn: sqlite3.Connection, items: list[Item], stocklist_date: date)
                 "special": None if item.special_price is None else str(item.special_price),
                 "qty": item.qty_avail,
                 "last_seen": stocklist_date.isoformat(),
+                "reuse": int(reuse),
             }
-            for item in items
-        ],
+        )
+    conn.executemany(
+        "INSERT INTO items (sku, size, name, retail_price, special_price, qty_avail, last_seen, "
+        "reuse_flagged) "
+        "VALUES (:sku, :size, :name, :retail, :special, :qty, :last_seen, :reuse) "
+        "ON CONFLICT(sku) DO UPDATE SET "
+        "size = excluded.size, name = excluded.name, retail_price = excluded.retail_price, "
+        "special_price = excluded.special_price, qty_avail = excluded.qty_avail, "
+        "last_seen = excluded.last_seen, "
+        "reuse_flagged = MAX(items.reuse_flagged, excluded.reuse_flagged)",
+        params,
     )
     # An absentee is exactly a row the upsert above did NOT just stamp with this run's
     # date, so "absent" is "last_seen is not stocklist_date" — one bound parameter rather
@@ -77,9 +102,29 @@ def reconcile(conn: sqlite3.Connection, items: list[Item], stocklist_date: date)
     conn.commit()
 
 
+def _normalize_name(name: str) -> str:
+    """Fold a name to its comparison form, collapsing differences the guard ignores.
+
+    Case, surrounding/internal whitespace runs, and punctuation are all normalized away,
+    so ``"Bichir Ornate"``, ``"bichir  ornate"`` and ``"Bichir, Ornate."`` compare equal.
+    """
+    return " ".join(re.sub(r"[^a-z0-9]+", " ", name.lower()).split())
+
+
+def _is_reuse(stored_name: str | None, incoming_name: str) -> bool:
+    """True when an existing SKU's name has materially changed.
+
+    ``stored_name`` is ``None`` for a SKU seen for the first time, which is never a reuse.
+    """
+    if stored_name is None:
+        return False
+    return _normalize_name(stored_name) != _normalize_name(incoming_name)
+
+
 def all_items(conn: sqlite3.Connection) -> list[Item]:
     rows = conn.execute(
-        "SELECT sku, size, name, retail_price, special_price, qty_avail, last_seen FROM items"
+        "SELECT sku, size, name, retail_price, special_price, qty_avail, last_seen, "
+        "reuse_flagged FROM items"
     ).fetchall()
     return [_row_to_item(row) for row in rows]
 
@@ -99,4 +144,5 @@ def _row_to_item(row: sqlite3.Row) -> Item:
         special_price=special,
         qty_avail=row["qty_avail"],
         last_seen=last_seen,
+        reuse_flagged=bool(row["reuse_flagged"]),
     )

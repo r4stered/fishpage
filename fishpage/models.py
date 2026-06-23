@@ -13,6 +13,10 @@ class Item:
     ``last_seen`` is the date the SKU last appeared in a Stocklist — a storage fact set
     by ingestion, not a parse fact, so a freshly-parsed Item leaves it ``None`` until it
     is reconciled into the store.
+
+    ``reuse_flagged`` is likewise a storage fact: ingestion sets it when this SKU
+    reappeared under a materially different name, marking the Item for human review. A
+    freshly-parsed Item is never flagged.
     """
 
     sku: str
@@ -22,3 +26,4 @@ class Item:
     special_price: Decimal | None
     qty_avail: int
     last_seen: date | None = None
+    reuse_flagged: bool = False
