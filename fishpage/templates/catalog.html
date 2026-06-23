@@ -17,12 +17,34 @@
       Include out of stock
     </label>
     <label>
+      <input type="checkbox" name="on_special" value="true"
+             onchange="this.form.submit()"{% if on_special %} checked{% endif %}>
+      On special only
+    </label>
+    <label>
       Category
       <select name="category" onchange="this.form.submit()">
         <option value="">All categories</option>
         {% for category in categories %}
         <option value="{{ category }}"{% if category == selected_category %} selected{% endif %}>{{ category }}</option>
         {% endfor %}
+      </select>
+    </label>
+    <label>
+      Size
+      <select name="size" onchange="this.form.submit()">
+        <option value="">All sizes</option>
+        {% for size in sizes %}
+        <option value="{{ size }}"{% if size == selected_size %} selected{% endif %}>{{ size }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>
+      Sort
+      <select name="sort" onchange="this.form.submit()">
+        <option value=""{% if not sort %} selected{% endif %}>Default</option>
+        <option value="price_asc"{% if sort == "price_asc" %} selected{% endif %}>Price: low to high</option>
+        <option value="price_desc"{% if sort == "price_desc" %} selected{% endif %}>Price: high to low</option>
       </select>
     </label>
   </form>

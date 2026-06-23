@@ -20,9 +20,21 @@ ANGEL_KOI = Item("120093", "M", "Angelfish Koi", Decimal("12.99"), None, 8)
 BARB = Item("170011", "-", "Barb Cherry", Decimal("3.99"), None, 40)
 
 
+# A spread of Angelfish varying in size, special price, and stock — plus an off-category
+# Barb — for exercising the browse controls in combination.
+ANGEL_M_SPECIAL = Item("120095", "M", "Angelfish Marble", Decimal("20.00"), Decimal("7.00"), 5)
+ANGEL_M_OOS = Item("120096", "M", "Angelfish Zebra", Decimal("11.00"), Decimal("6.00"), 0)
+
+
 def client(tmp_path):
     conn = open_store(tmp_path / "fishpage.db")
     reconcile(conn, [ORNATE_M, LEAF, SOLD_OUT], JUN19)
+    return TestClient(create_app(conn))
+
+
+def combo_client(tmp_path):
+    conn = open_store(tmp_path / "fishpage.db")
+    reconcile(conn, [ANGEL, ANGEL_KOI, ANGEL_M_SPECIAL, ANGEL_M_OOS, BARB], JUN19)
     return TestClient(create_app(conn))
 
 
@@ -222,6 +234,157 @@ def test_index_filters_grid_by_category(tmp_path):
     assert 'data-sku="110042"' not in html  # oddball excluded
     # The chosen category is reflected as the selected option.
     assert '<option value="Barb" selected' in html
+
+
+def test_catalog_filters_by_size(tmp_path):
+    resp = client(tmp_path).get("/catalog", params={"size": "M"})
+
+    # Only the M-grade Bichir comes back; the "-" Leaf and the L Datnoid are excluded.
+    assert {i["sku"] for i in resp.json()} == {"110042"}
+
+
+def test_catalog_filters_to_on_special_only(tmp_path):
+    resp = client(tmp_path).get("/catalog", params={"on_special": "true"})
+
+    # Only the Leaf carries a special price; the retail-only Bichir drops out.
+    assert {i["sku"] for i in resp.json()} == {"110092"}
+
+
+def test_catalog_sorts_by_effective_price_ascending(tmp_path):
+    resp = client(tmp_path).get("/catalog", params={"sort": "price_asc"})
+
+    # The Leaf's special (4.99) is below the Bichir's retail (28.99), so it leads.
+    assert [i["sku"] for i in resp.json()] == ["110092", "110042"]
+
+
+def test_catalog_sorts_by_effective_price_descending(tmp_path):
+    resp = client(tmp_path).get("/catalog", params={"sort": "price_desc"})
+
+    assert [i["sku"] for i in resp.json()] == ["110042", "110092"]
+
+
+def test_catalog_combines_category_size_and_on_special(tmp_path):
+    resp = combo_client(tmp_path).get(
+        "/catalog", params={"category": "Angelfish", "size": "M", "on_special": "true"}
+    )
+
+    # Of the M Angelfish, only the in-stock one with a special survives all three filters:
+    # the S Angelfish, the non-special M Koi, the off-category Barb, and the out-of-stock
+    # M (zeroed, hidden by the default in-stock view) all drop out.
+    assert {i["sku"] for i in resp.json()} == {"120095"}
+
+
+def test_catalog_combines_category_filter_with_effective_price_sort(tmp_path):
+    resp = combo_client(tmp_path).get(
+        "/catalog", params={"category": "Angelfish", "sort": "price_asc"}
+    )
+
+    # Barb excluded by category; the three in-stock Angelfish come back cheapest-first by
+    # effective price: Marble's special 7.00, then Full Black 9.99, then Koi 12.99.
+    assert [i["sku"] for i in resp.json()] == ["120095", "120091", "120093"]
+
+
+def test_catalog_combines_out_of_stock_toggle_with_on_special(tmp_path):
+    resp = combo_client(tmp_path).get(
+        "/catalog", params={"include_out_of_stock": "true", "on_special": "true"}
+    )
+
+    # With out-of-stock included, both special-priced Angelfish surface — including the
+    # zeroed Zebra that the default view would hide.
+    assert {i["sku"] for i in resp.json()} == {"120095", "120096"}
+
+
+def test_index_has_auto_submitting_size_dropdown(tmp_path):
+    html = client(tmp_path).get("/").text
+
+    # A select bound to the query param, auto-submitting on change, with the fixed grade set
+    # plus an empty "all sizes" default.
+    assert '<select name="size" onchange="this.form.submit()"' in html
+    for grade in ("-", "S", "M", "L", "Jumbo"):
+        assert f'<option value="{grade}"' in html
+
+
+def test_index_size_dropdown_reflects_selected_grade(tmp_path):
+    html = client(tmp_path).get("/", params={"size": "M"}).text
+
+    assert '<option value="M" selected' in html
+
+
+def _on_special_input(html):
+    """The on-special checkbox's own <input> tag, so assertions scope to it alone and a
+    checked state on some unrelated control can't satisfy (or break) them."""
+    start = html.index('<input type="checkbox" name="on_special"')
+    return html[start : html.index(">", start) + 1]
+
+
+def test_index_has_auto_submitting_on_special_toggle_unchecked_by_default(tmp_path):
+    tag = _on_special_input(client(tmp_path).get("/").text)
+
+    # The on-special input auto-submits on change and is off by default.
+    assert "this.form.submit()" in tag
+    assert "checked" not in tag
+
+
+def test_index_on_special_toggle_is_checked_when_active(tmp_path):
+    tag = _on_special_input(client(tmp_path).get("/", params={"on_special": "true"}).text)
+
+    assert "checked" in tag
+
+
+def test_index_has_auto_submitting_sort_dropdown(tmp_path):
+    html = client(tmp_path).get("/").text
+
+    # A select bound to the query param, auto-submitting on change, offering both effective
+    # price directions plus a default order.
+    assert '<select name="sort" onchange="this.form.submit()"' in html
+    assert '<option value="price_asc"' in html
+    assert '<option value="price_desc"' in html
+
+
+def test_index_sort_dropdown_reflects_selected_order(tmp_path):
+    html = client(tmp_path).get("/", params={"sort": "price_desc"}).text
+
+    assert '<option value="price_desc" selected' in html
+
+
+def test_index_all_browse_controls_share_one_form(tmp_path):
+    # Every control lives in a single form, so changing one preserves the others' state.
+    html = combo_client(tmp_path).get("/").text
+
+    assert html.count("<form") == 1
+    for control in (
+        'name="search"',
+        'name="include_out_of_stock"',
+        'name="category"',
+        'name="size"',
+        'name="on_special"',
+        'name="sort"',
+    ):
+        assert control in html
+
+
+def test_index_filters_grid_by_size(tmp_path):
+    html = combo_client(tmp_path).get("/", params={"size": "S"}).text
+
+    assert 'data-sku="120091"' in html  # the only S Angelfish
+    assert 'data-sku="120093"' not in html  # an M Angelfish, excluded
+
+
+def test_index_filters_grid_to_on_special(tmp_path):
+    html = combo_client(tmp_path).get("/", params={"on_special": "true"}).text
+
+    assert 'data-sku="120095"' in html  # in-stock special
+    assert 'data-sku="120091"' not in html  # no special, excluded
+    assert 'data-sku="120096"' not in html  # special but out of stock, hidden by default
+
+
+def test_index_sorts_grid_by_effective_price(tmp_path):
+    html = (
+        combo_client(tmp_path).get("/", params={"category": "Angelfish", "sort": "price_asc"}).text
+    )
+
+    # The cheapest-by-effective-price card renders before the priciest.
+    assert html.index('data-sku="120095"') < html.index('data-sku="120093"')
 
 
 def test_index_dropdown_lists_categories_independent_of_stock_filter(tmp_path):
