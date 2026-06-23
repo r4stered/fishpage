@@ -1,10 +1,13 @@
+from datetime import date
 from decimal import Decimal
 
 from fastapi.testclient import TestClient
 
 from fishpage.app import create_app
 from fishpage.models import Item
-from fishpage.store import open_store, save_items
+from fishpage.store import open_store, reconcile
+
+JUN19 = date(2026, 6, 19)
 
 ORNATE_M = Item("110042", "M", "Bichir Ornate", Decimal("28.99"), None, 15)
 LEAF = Item("110092", "-", "Leaf Fish Leopard Ctenopoma", Decimal("5.99"), Decimal("4.99"), 30)
@@ -12,7 +15,7 @@ LEAF = Item("110092", "-", "Leaf Fish Leopard Ctenopoma", Decimal("5.99"), Decim
 
 def client(tmp_path):
     conn = open_store(tmp_path / "fishpage.db")
-    save_items(conn, [ORNATE_M, LEAF])
+    reconcile(conn, [ORNATE_M, LEAF], JUN19)
     return TestClient(create_app(conn))
 
 
@@ -33,6 +36,22 @@ def test_catalog_endpoint_returns_all_items_with_shape(tmp_path):
         "qty_avail": 15,
     }
     assert items["110092"]["special_price"] == "4.99"
+
+
+def test_catalog_reflects_reconciled_state_after_reingest(tmp_path):
+    conn = open_store(tmp_path / "fishpage.db")
+    reconcile(conn, [ORNATE_M, LEAF], JUN19)
+
+    # A second Stocklist: ORNATE_M is cheaper and scarcer, LEAF is gone.
+    repriced = Item("110042", "M", "Bichir Ornate", Decimal("24.99"), None, 2)
+    reconcile(conn, [repriced], date(2026, 6, 26))
+
+    resp = TestClient(create_app(conn)).get("/catalog")
+    items = {item["sku"]: item for item in resp.json()}
+
+    assert items["110042"]["retail_price"] == "24.99"
+    assert items["110042"]["qty_avail"] == 2
+    assert items["110092"]["qty_avail"] == 0  # absentee zeroed, still served
 
 
 def test_index_renders_one_card_per_item(tmp_path):
