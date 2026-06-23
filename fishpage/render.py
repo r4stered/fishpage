@@ -12,5 +12,7 @@ _env = Environment(
 )
 
 
-def render_catalog(items: list[Item]) -> str:
-    return _env.get_template("catalog.html").render(items=items)
+def render_catalog(items: list[Item], *, include_out_of_stock: bool = False) -> str:
+    return _env.get_template("catalog.html").render(
+        items=items, include_out_of_stock=include_out_of_stock
+    )
