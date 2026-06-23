@@ -23,9 +23,11 @@ livestock to order. Not a public storefront.
   set `-`/`S`/`M`/`L`/`Jumbo`; per
   [ADR 0002](docs/adr/0002-size-column-is-overloaded.md) packaging-unit rows (e.g. `POTTED`)
   match no grade. Every control combines.
-- Rebuilds the catalog from a configured Stocklist PDF on start; a watched-folder trigger
-  for nightly automation is a later slice
-  ([#9](https://github.com/r4stered/fishpage/issues/9)).
+- Rebuilds the catalog from a configured Stocklist PDF on start, then **watches an incoming
+  folder**: a Stocklist PDF dropped into it is parsed and reconciled into the live catalog and
+  moved aside. A polling trigger over a trigger-agnostic core keeps the drop reliable on a
+  mounted volume and swappable for event- or HTTP-driven ingestion later (see
+  [ADR 0005](docs/adr/0005-watched-folder-polling-trigger.md)).
 
 ## Stack
 
@@ -44,6 +46,11 @@ Then open <http://127.0.0.1:8000/> for the catalog grid, or `GET /catalog` for J
 The walking skeleton rebuilds the catalog from the committed sample PDF
 (`tests/fixtures/Freshwater_Stocklist_6-19-26.pdf`) on every start. Point it at another PDF
 with `STOCKLIST_PDF=/path/to.pdf uv run just run`.
+
+While it runs, drop a Stocklist PDF into `data/incoming/` (named `..._M-D-YY.pdf` so its date
+is read from the filename) and the catalog reconciles it within one poll, moving the file to
+`data/processed/`. Override the locations and cadence with `INCOMING_DIR`, `PROCESSED_DIR`, and
+`INGEST_POLL_SECONDS`.
 
 ## Checks
 
@@ -86,11 +93,11 @@ upsert-by-SKU reconciliation with `last_seen` and zeroed absentees
 toggle ([#5](https://github.com/r4stered/fishpage/issues/5)), the Derived Category filter
 ([#6](https://github.com/r4stered/fishpage/issues/6)), fuzzy name search
 ([#7](https://github.com/r4stered/fishpage/issues/7)), the Size/on-special filters and
-effective-price sort ([#8](https://github.com/r4stered/fishpage/issues/8)), and the
-CI / dev-tooling gate ([#14](https://github.com/r4stered/fishpage/issues/14)).
+effective-price sort ([#8](https://github.com/r4stered/fishpage/issues/8)), the
+CI / dev-tooling gate ([#14](https://github.com/r4stered/fishpage/issues/14)), and
+watched-folder ingestion ([#9](https://github.com/r4stered/fishpage/issues/9)).
 
-Remaining v1 slices: watched-folder ingestion
-([#9](https://github.com/r4stered/fishpage/issues/9)), containerization with a persistent
+Remaining v1 slices: containerization with a persistent
 volume ([#10](https://github.com/r4stered/fishpage/issues/10)), and parser resilience for
 varied layouts and malformed rows
 ([#12](https://github.com/r4stered/fishpage/issues/12), [#13](https://github.com/r4stered/fishpage/issues/13)).

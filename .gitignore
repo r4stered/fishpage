@@ -31,8 +31,10 @@ build/
 *.db-wal
 *.db-shm
 
-# Runtime watched-folder drops (the nightly/manual Stocklist lands here)
+# Runtime watched-folder drops (the nightly/manual Stocklist lands here) and the
+# ingested Stocklists moved aside after reconciliation
 /data/incoming/
+/data/processed/
 
 # --- Override global gitignore: this repo DOES commit docs/ ---
 !docs/

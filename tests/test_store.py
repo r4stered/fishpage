@@ -3,13 +3,26 @@ from datetime import date
 from decimal import Decimal
 
 from fishpage.models import Item
-from fishpage.store import all_items, open_store, reconcile
+from fishpage.store import all_items, latest_stocklist_date, open_store, reconcile
 
 JUN19 = date(2026, 6, 19)
+JUN26 = date(2026, 6, 26)
 
 ORNATE_M = Item("110042", "M", "Bichir Ornate", Decimal("28.99"), None, 15)
 LEAF = Item("110092", "-", "Leaf Fish Leopard Ctenopoma", Decimal("5.99"), Decimal("4.99"), 30)
 SOLD_OUT = Item("110200", "L", "Datnoid Indo", Decimal("89.99"), None, 0)
+
+
+def test_latest_stocklist_date_is_none_when_empty(tmp_path):
+    conn = open_store(tmp_path / "fishpage.db")
+    assert latest_stocklist_date(conn) is None
+
+
+def test_latest_stocklist_date_is_the_newest_reconciled_date(tmp_path):
+    conn = open_store(tmp_path / "fishpage.db")
+    reconcile(conn, [ORNATE_M], JUN19)
+    reconcile(conn, [ORNATE_M], JUN26)
+    assert latest_stocklist_date(conn) == JUN26
 
 
 def test_items_round_trip_through_sqlite(tmp_path):

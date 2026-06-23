@@ -31,8 +31,12 @@ CREATE TABLE IF NOT EXISTS items (
 
 
 def open_store(path: str | Path) -> sqlite3.Connection:
-    # check_same_thread=False: the FastAPI handler thread differs from the thread that
-    # opened the connection. Our access is serialized (read-mostly), so this is safe.
+    # check_same_thread=False: this one connection is shared across threads — FastAPI handler
+    # threads read from it while a background ingestion thread writes through it. The writer
+    # runs one reconcile transaction per dropped Stocklist (a nightly cadence), so a reader can
+    # briefly observe a half-reconciled state in the window between the upsert and the
+    # absentee-zeroing UPDATE. For a low-traffic internal tool that window is acceptable;
+    # closing it would mean a write lock around reconcile or a per-reader WAL snapshot.
     conn = sqlite3.connect(path, check_same_thread=False)
     conn.row_factory = sqlite3.Row
     conn.execute(_SCHEMA)
@@ -134,6 +138,17 @@ def _is_reuse(stored_name: str | None, incoming_name: str) -> bool:
     if stored_name is None:
         return False
     return _normalize_name(stored_name) != _normalize_name(incoming_name)
+
+
+def latest_stocklist_date(conn: sqlite3.Connection) -> date | None:
+    """The most recent Stocklist date reconciled into the store, or ``None`` if it is empty.
+
+    This is ``MAX(last_seen)``: every reconcile stamps its present SKUs with the run's date, so
+    the maximum is the newest Stocklist ever applied. Callers use it to keep ingestion monotonic
+    — refusing to apply a Stocklist older than one already reconciled.
+    """
+    row = conn.execute("SELECT MAX(last_seen) AS latest FROM items").fetchone()
+    return None if row["latest"] is None else date.fromisoformat(row["latest"])
 
 
 def all_items(conn: sqlite3.Connection, *, include_out_of_stock: bool = True) -> list[Item]:
