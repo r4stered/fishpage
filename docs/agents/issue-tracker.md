@@ -20,3 +20,8 @@ Create a GitHub issue.
 ## When a skill says "fetch the relevant ticket"
 
 Run `gh issue view <number> --comments`.
+
+## Delivering an issue
+
+Work each issue on its own branch and merge it through a PR that closes the issue. See
+[`branch-workflow.md`](branch-workflow.md).

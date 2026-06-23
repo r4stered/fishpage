@@ -39,3 +39,5 @@ build/
 !docs/**
 !CLAUDE.md
 !CONTEXT.md
+# Local catalog DB built from the sample Stocklist
+fishpage.db

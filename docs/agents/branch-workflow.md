@@ -1,0 +1,63 @@
+# Branch & PR workflow: one branch per issue
+
+Each issue is delivered on its own branch and merged through a pull request that closes the
+issue. `main` stays green; work never lands directly on it.
+
+## Steps
+
+1. **Branch off `main`**, named for the issue:
+
+   ```sh
+   git switch main && git pull
+   git switch -c issue-<number>-<short-slug>     # e.g. issue-2-walking-skeleton
+   ```
+
+2. **Do the work on that branch.** Keep the branch scoped to the one issue; unrelated fixes
+   belong on their own branch and issue.
+
+3. **Commit** with a message whose body ends by linking the issue:
+
+   ```
+   <type>: <summary>
+
+   <what changed and why>
+
+   Refs #<number>
+   ```
+
+   Use `Refs #<n>` on intermediate commits. Save the closing keyword for the PR (step 5) so
+   the issue closes on merge, not on the first commit.
+
+4. **Push** and set upstream:
+
+   ```sh
+   git push -u origin issue-<number>-<short-slug>
+   ```
+
+5. **Open a PR** whose body contains a [closing keyword][closes] so GitHub auto-links it and
+   closes the issue when the PR merges:
+
+   ```sh
+   gh pr create --base main --title "..." --body "$(cat <<'EOF'
+   <summary>
+
+   Closes #<number>
+
+   <details / verification>
+   EOF
+   )"
+   ```
+
+   GitHub recognizes `Closes #<n>`, `Fixes #<n>`, and `Resolves #<n>` (case-insensitive). The
+   PR view will show "Closes #<n>" and tag the issue; merging into `main` closes it.
+
+6. **Merge** once checks/review pass; delete the branch.
+
+## Notes
+
+- One issue → one branch → one PR. If a PR grows to cover extra issues, list each:
+  `Closes #2`, `Closes #3` (each keyword needs its own `#n`).
+- A closing keyword only fires when the PR targets the **default branch** (`main`) and is
+  merged — not on a draft, and not from a comment.
+
+[closes]: https://docs.github.com/issues/tracking-your-work-with-issues/linking-a-pull-request-to-an-issue
