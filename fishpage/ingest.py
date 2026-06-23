@@ -31,8 +31,8 @@ def ingest_pending(conn: sqlite3.Connection, incoming_dir: Path, processed_dir: 
     Three kinds of drop are skipped and left in ``incoming_dir`` rather than reconciled, because
     each would otherwise corrupt the catalog through ``reconcile``'s run-date semantics:
 
-    - **No date in the filename.** The Stocklist date drives ``last_seen`` and the absentee
-      sweep, so a missing date can't be guessed — the file waits to be renamed.
+    - **No valid date in the filename.** The Stocklist date drives ``last_seen`` and the absentee
+      sweep, so a missing or out-of-range date can't be guessed — the file waits to be renamed.
     - **Older than the catalog.** Ingestion is monotonic: a Stocklist no newer than the latest
       already reconciled would regress ``last_seen`` and zero every SKU absent from it. This
       guards the cross-pass case the within-pass date sort cannot see.
@@ -47,7 +47,9 @@ def ingest_pending(conn: sqlite3.Connection, incoming_dir: Path, processed_dir: 
         try:
             dated.append((stocklist_date(pdf), pdf))
         except ValueError:
-            _log.warning("Skipping %s: no M-D-YY date in its name; rename it to ingest.", pdf.name)
+            _log.warning(
+                "Skipping %s: no valid M-D-YY date in its name; rename it to ingest.", pdf.name
+            )
 
     ingested: list[Path] = []
     # Oldest-first so the newest Stocklist lands last; reconcile pivots the absentee sweep on
@@ -113,12 +115,16 @@ def _ingest_pass(conn: sqlite3.Connection, incoming_dir: Path, processed_dir: Pa
 def stocklist_date(pdf_path: Path) -> date:
     """Derive the Stocklist date from a ``..._M-D-YY.pdf`` filename.
 
-    Raises :class:`ValueError` when the name carries no ``M-D-YY`` token. The date is the
-    authoritative run-date for reconciliation, so a caller must decide what to do about a
-    nameless file rather than have one silently invented.
+    Raises :class:`ValueError` when the name carries no ``M-D-YY`` token *or* carries one that
+    is not a real date (e.g. ``13-40-26``). The date is the authoritative run-date for
+    reconciliation, so a caller must decide what to do about such a file rather than have a date
+    silently invented for it.
     """
     match = re.search(r"(\d{1,2})-(\d{1,2})-(\d{2})\b", pdf_path.stem)
-    if match is None:
-        raise ValueError(f"no Stocklist date in filename: {pdf_path.name!r}")
-    month, day, year = (int(part) for part in match.groups())
-    return date(2000 + year, month, day)
+    if match is not None:
+        month, day, year = (int(part) for part in match.groups())
+        try:
+            return date(2000 + year, month, day)
+        except ValueError:
+            pass  # matched a date-shaped token, but it is out of range — fall through
+    raise ValueError(f"no valid Stocklist date in filename: {pdf_path.name!r}")

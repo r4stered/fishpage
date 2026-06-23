@@ -163,8 +163,29 @@ def test_stocklist_date_reads_the_filename():
 
 
 def test_stocklist_date_raises_when_filename_has_no_date():
-    with pytest.raises(ValueError, match="no Stocklist date in filename"):
+    with pytest.raises(ValueError, match="no valid Stocklist date in filename"):
         stocklist_date(Path("no_date_here.pdf"))
+
+
+def test_stocklist_date_raises_on_an_out_of_range_date():
+    # The regex matches 13-40-26, but month 13 / day 40 is not a real date.
+    with pytest.raises(ValueError, match="no valid Stocklist date in filename"):
+        stocklist_date(Path("Freshwater_Stocklist_13-40-26.pdf"))
+
+
+def test_invalid_date_drop_does_not_wedge_a_valid_one(tmp_path):
+    incoming = tmp_path / "incoming"
+    processed = tmp_path / "processed"
+    conn = open_store(tmp_path / "fishpage.db")
+
+    # A garbage-dated file sits beside a valid drop in the same pass.
+    invalid = _drop(incoming, "Freshwater_Stocklist_13-40-26.pdf")
+    _drop(incoming, "Freshwater_Stocklist_6-19-26.pdf")
+    ingested = ingest_pending(conn, incoming, processed)
+
+    assert [p.name for p in ingested] == ["Freshwater_Stocklist_6-19-26.pdf"]  # valid drop applied
+    assert len(all_items(conn)) == 969
+    assert invalid.is_file()  # the bad file is skipped, not wedging the pass
 
 
 def test_undated_drop_is_skipped_not_stamped_with_today(tmp_path):

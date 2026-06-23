@@ -52,10 +52,11 @@ against, so ingestion is made **monotonic** instead: each pass reads the catalog
 in `incoming` with a logged warning rather than regressing the live catalog. This guard lives in the
 ingestion layer, not in `reconcile`, which stays trigger-agnostic.
 
-A drop whose filename carries **no `M-D-YY` date** is likewise skipped and left for the user to rename:
-the date is the authoritative run-date, and inventing one (e.g. today's) would silently mis-stamp
-`last_seen` and mis-pivot the absentee sweep. `stocklist_date` therefore raises rather than guessing, and
-the ingestion pass turns that into a per-file skip so one misnamed drop cannot wedge the others.
+A drop whose filename carries **no valid `M-D-YY` date** — missing, or a date-shaped token like
+`13-40-26` that is out of range — is likewise skipped and left for the user to rename: the date is the
+authoritative run-date, and inventing one (e.g. today's) would silently mis-stamp `last_seen` and
+mis-pivot the absentee sweep. `stocklist_date` therefore raises rather than guessing, and the ingestion
+pass catches that **per file** so one misnamed drop cannot wedge the others in the same pass.
 
 ## Consequences
 
