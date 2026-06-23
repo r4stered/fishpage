@@ -16,6 +16,7 @@ SOLD_OUT = Item("110200", "L", "Datnoid Indo", Decimal("89.99"), None, 0)
 # Items spanning distinct Derived Categories, for the category-filter tests.
 # ORNATE_M and LEAF are both block-11 Monster/Oddball.
 ANGEL = Item("120091", "S", "Angelfish Full Black", Decimal("9.99"), None, 12)
+ANGEL_KOI = Item("120093", "M", "Angelfish Koi", Decimal("12.99"), None, 8)
 BARB = Item("170011", "-", "Barb Cherry", Decimal("3.99"), None, 40)
 
 
@@ -28,6 +29,12 @@ def client(tmp_path):
 def categorized_client(tmp_path):
     conn = open_store(tmp_path / "fishpage.db")
     reconcile(conn, [ORNATE_M, LEAF, ANGEL, BARB], JUN19)
+    return TestClient(create_app(conn))
+
+
+def searchable_client(tmp_path):
+    conn = open_store(tmp_path / "fishpage.db")
+    reconcile(conn, [ANGEL, ANGEL_KOI, BARB], JUN19)
     return TestClient(create_app(conn))
 
 
@@ -143,6 +150,47 @@ def test_catalog_filters_by_category(tmp_path):
 
     # Only the two block-11 oddballs come back; the Angelfish and Barb are excluded.
     assert {i["sku"] for i in resp.json()} == {"110042", "110092"}
+
+
+def test_catalog_fuzzy_searches_by_name(tmp_path):
+    resp = searchable_client(tmp_path).get("/catalog", params={"search": "angel koi"})
+
+    # "angel koi" finds the Angelfish Koi by partial, order-free token match; the other
+    # Angelfish and the Barb are left out.
+    assert {i["sku"] for i in resp.json()} == {"120093"}
+
+
+def test_catalog_search_orders_by_relevance(tmp_path):
+    conn = open_store(tmp_path / "fishpage.db")
+    exact = Item("120094", "M", "Angel Koi", Decimal("14.99"), None, 5)
+    reconcile(conn, [ANGEL_KOI, exact], JUN19)
+    resp = TestClient(create_app(conn)).get("/catalog", params={"search": "angel koi"})
+
+    # The exact "Angel Koi" outranks the partial "Angelfish Koi" in the JSON order.
+    assert [i["sku"] for i in resp.json()] == ["120094", "120093"]
+
+
+def test_catalog_without_search_returns_everything(tmp_path):
+    resp = searchable_client(tmp_path).get("/catalog")
+
+    assert {i["sku"] for i in resp.json()} == {"120091", "120093", "170011"}
+
+
+def test_index_has_search_box_reflecting_the_active_term(tmp_path):
+    html = searchable_client(tmp_path).get("/", params={"search": "angel koi"}).text
+
+    # A text input bound to the query param, holding the active term so the box keeps its
+    # text across submits.
+    assert 'name="search"' in html
+    assert 'value="angel koi"' in html
+
+
+def test_index_filters_grid_by_search(tmp_path):
+    html = searchable_client(tmp_path).get("/", params={"search": "angel koi"}).text
+
+    assert 'data-sku="120093"' in html  # Angelfish Koi
+    assert 'data-sku="120091"' not in html  # the other Angelfish excluded
+    assert 'data-sku="170011"' not in html  # Barb excluded
 
 
 def test_index_has_auto_submitting_category_dropdown(tmp_path):

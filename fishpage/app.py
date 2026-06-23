@@ -9,6 +9,7 @@ from fastapi.staticfiles import StaticFiles
 
 from fishpage.models import Item
 from fishpage.render import render_catalog
+from fishpage.search import match_names
 from fishpage.store import all_items
 
 _STATIC = Path(__file__).parent / "static"
@@ -38,13 +39,22 @@ def create_app(conn: sqlite3.Connection) -> FastAPI:
     app.mount("/static", StaticFiles(directory=_STATIC), name="static")
 
     @app.get("/catalog")
-    def catalog(include_out_of_stock: bool = False, category: str | None = None) -> JSONResponse:
+    def catalog(
+        include_out_of_stock: bool = False,
+        category: str | None = None,
+        search: str = "",
+    ) -> JSONResponse:
         items = all_items(conn, include_out_of_stock=include_out_of_stock)
         items = _by_category(items, category)
+        items = match_names(items, search)
         return JSONResponse([_item_dict(item) for item in items])
 
     @app.get("/", response_class=HTMLResponse)
-    def index(include_out_of_stock: bool = False, category: str | None = None) -> HTMLResponse:
+    def index(
+        include_out_of_stock: bool = False,
+        category: str | None = None,
+        search: str = "",
+    ) -> HTMLResponse:
         # Load the whole catalog once: the dropdown lists every category regardless of the
         # active filters, so narrowing to In stock in SQL would force a second read for the
         # vocabulary. Both view filters are applied in process instead.
@@ -53,12 +63,14 @@ def create_app(conn: sqlite3.Connection) -> FastAPI:
         if not include_out_of_stock:
             items = [item for item in items if item.qty_avail > 0]
         items = _by_category(items, category)
+        items = match_names(items, search)
         return HTMLResponse(
             render_catalog(
                 items,
                 include_out_of_stock=include_out_of_stock,
                 categories=categories,
                 selected_category=category,
+                search=search,
             )
         )
 

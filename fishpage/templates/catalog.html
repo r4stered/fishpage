@@ -8,6 +8,10 @@
   <h1>Catalog</h1>
   <form class="filters" method="get" action="/">
     <label>
+      Search
+      <input type="search" name="search" value="{{ search }}" placeholder="name">
+    </label>
+    <label>
       <input type="checkbox" name="include_out_of_stock" value="true"
              onchange="this.form.submit()"{% if include_out_of_stock %} checked{% endif %}>
       Include out of stock
