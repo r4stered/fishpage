@@ -17,11 +17,13 @@ def test_partial_tokens_match_across_words():
 
 
 def test_results_are_ranked_by_relevance():
-    # All three pass the filter for "angel koi"; the closer the whole name is to the
-    # query, the higher it ranks. Input order (Smokey, Angelfish, exact) is overridden.
+    # All three pass the filter for "angel koi"; the tighter the whole name matches the
+    # query, the higher it ranks. The exact "Angel Koi" leads, the clean "Angelfish Koi"
+    # outranks the same name padded with an extra "Smokey" word, and input order
+    # (Smokey, Angelfish, exact) is overridden.
     ranked = match_names([SMOKEY_KOI, ANGEL_KOI, EXACT_KOI], "angel koi")
 
-    assert ranked == [EXACT_KOI, SMOKEY_KOI, ANGEL_KOI]
+    assert ranked == [EXACT_KOI, ANGEL_KOI, SMOKEY_KOI]
 
 
 def test_blank_term_does_not_filter():

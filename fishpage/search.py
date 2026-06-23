@@ -28,9 +28,10 @@ def match_names(items: list[Item], term: str) -> list[Item]:
 
 
 def _relevance(name: str, term: str) -> float:
-    # Score the whole name against the whole query, so a name that matches the query more
-    # completely outranks one that only matches it partially.
-    return fuzz.WRatio(term.lower(), name.lower())
+    # Score the whole name against the whole query with the tokens sorted, so word order
+    # doesn't matter and a name padded with extra words ranks below the tighter match a
+    # substring-based scorer would wrongly reward.
+    return fuzz.token_sort_ratio(term.lower(), name.lower())
 
 
 def _matches_all(name: str, query_tokens: list[str]) -> bool:

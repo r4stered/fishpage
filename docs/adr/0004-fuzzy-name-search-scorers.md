@@ -14,10 +14,14 @@ scorers, because the scorer that filters well ranks badly and vice versa:
   some word of the name at `partial_ratio >= 80`. A short token that prefixes a longer word
   (`"angel"` in `"Angelfish"`) scores 100, so partial spellings match while unrelated words fall well
   below. Every query token must land, so `"barb koi"` does not match `"Barb Cherry"`.
-- **Rank — `WRatio`, whole name.** `partial_ratio` saturates at 100 for any substring hit, so it
-  cannot tell an exact match from a loose one and is useless for ordering. The survivors are sorted by
-  `WRatio` of the whole query against the whole name, which rewards completeness: `"angel koi"` scores
-  `"Angel Koi"` at 100 over `"Angelfish Koi"` at ~82. Ties keep input order (the sort is stable).
+- **Rank — `token_sort_ratio`, whole name.** `partial_ratio` saturates at 100 for any substring hit,
+  so it cannot tell an exact match from a loose one and is useless for ordering. The survivors are
+  sorted by `token_sort_ratio` of the whole query against the whole name (tokens sorted first, so word
+  order doesn't matter): `"angel koi"` scores `"Angel Koi"` at 100, the clean `"Angelfish Koi"` at ~82,
+  and the extra-word `"Angelfish Koi Smokey"` lower still. A substring-based composite such as `WRatio`
+  was rejected for ranking: it rewards containment, so padding a name with extra words *raises* its
+  score and floats looser matches above the tighter one a searcher typed for. Ties keep input order
+  (the sort is stable).
 
 A blank term is no search at all and passes every Item through, unranked.
 
