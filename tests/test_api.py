@@ -45,12 +45,14 @@ def test_index_renders_one_card_per_item(tmp_path):
     assert html.count('data-sku="110092"') == 1
 
     # Each card shows name, size, retail price, quantity, and a placeholder image.
+    # Assert against the tagged spans so a value can't be satisfied by an unrelated
+    # number elsewhere in the page.
     assert "Bichir Ornate" in html
     assert "Leaf Fish Leopard Ctenopoma" in html
-    assert "28.99" in html          # retail price
-    assert ">M<" in html or ">M " in html  # size grade
-    assert "15" in html             # qty_avail
+    assert '<span class="retail-price">$28.99</span>' in html
+    assert '<span class="size">M</span>' in html
+    assert '<span class="qty">15 available</span>' in html
     assert "placeholder" in html and "<img" in html
 
     # The special price appears only on the row that has one.
-    assert "4.99" in html
+    assert '<span class="special-price">special $4.99</span>' in html
