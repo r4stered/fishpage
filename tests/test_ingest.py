@@ -6,7 +6,7 @@ from datetime import date
 from pathlib import Path
 
 import fishpage.ingest as ingest_mod
-from fishpage.ingest import _ingest_pass, ingest_pending
+from fishpage.ingest import _ingest_pass, ingest_pending, stocklist_date
 from fishpage.store import all_items, open_store
 
 FIXTURE = Path(__file__).parent / "fixtures" / "Freshwater_Stocklist_6-19-26.pdf"
@@ -142,3 +142,23 @@ def test_ingest_pass_survives_a_failed_parse(tmp_path, monkeypatch):
 
     assert all_items(conn) == []  # nothing ingested
     assert drop.is_file()  # left in incoming for the next tick
+
+
+def test_ingest_pass_ingests_a_real_drop(tmp_path):
+    incoming = tmp_path / "incoming"
+    processed = tmp_path / "processed"
+    _drop(incoming, "Freshwater_Stocklist_6-19-26.pdf")
+
+    conn = open_store(tmp_path / "fishpage.db")
+    _ingest_pass(conn, incoming, processed)
+
+    assert len(all_items(conn)) == 969  # the pass reconciled the drop
+    assert (processed / "Freshwater_Stocklist_6-19-26.pdf").is_file()
+
+
+def test_stocklist_date_reads_the_filename():
+    assert stocklist_date(Path("Freshwater_Stocklist_6-19-26.pdf")) == date(2026, 6, 19)
+
+
+def test_stocklist_date_falls_back_to_today_when_unnamed():
+    assert stocklist_date(Path("no_date_here.pdf")) == date.today()
