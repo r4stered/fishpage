@@ -16,12 +16,14 @@ Edit the right-hand column to match whatever vocabulary you actually use.
 
 ## Default assignee
 
-The maintainer is **`r4stered`** (Drew Williams). Assign issues to them by default — both when
-creating an issue and when triaging one — unless explicitly told otherwise:
+The maintainer is **`r4stered`** (Drew Williams). Assign **issues and PRs** to them by default —
+when creating an issue, when triaging one, and when opening a PR — unless explicitly told otherwise:
 
 ```sh
-gh issue create ... --assignee r4stered     # or --assignee @me when the maintainer runs it
+gh issue create ... --assignee r4stered      # or --assignee @me when the maintainer runs it
 gh issue edit <number> --add-assignee r4stered
+gh pr create   ... --assignee r4stered
+gh pr edit   <number> --add-assignee r4stered
 ```
 
 ## Applying labels
@@ -43,6 +45,13 @@ On a **state transition**, remove the old state label in the same call so the tw
 
 ```sh
 gh issue edit <number> --add-label ready-for-agent --remove-label needs-triage
+```
+
+**PRs** carry the **category** label only — the `bug` / `enhancement` of the issue they close.
+State roles are an issue-triage concept and don't belong on a PR.
+
+```sh
+gh pr edit <number> --add-label enhancement
 ```
 
 These labels don't exist in the GitHub repo yet. Create them on first use with, e.g.:

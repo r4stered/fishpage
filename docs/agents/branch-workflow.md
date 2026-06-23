@@ -38,7 +38,8 @@ issue. `main` stays green; work never lands directly on it.
    closes the issue when the PR merges:
 
    ```sh
-   gh pr create --base main --title "..." --body "$(cat <<'EOF'
+   gh pr create --base main --assignee r4stered --label <category> \
+     --title "..." --body "$(cat <<'EOF'
    <summary>
 
    Closes #<number>
@@ -50,6 +51,12 @@ issue. `main` stays green; work never lands directly on it.
 
    GitHub recognizes `Closes #<n>`, `Fixes #<n>`, and `Resolves #<n>` (case-insensitive). The
    PR view will show "Closes #<n>" and tag the issue; merging into `main` closes it.
+
+   Assign and label the PR the same way as an issue: assignee defaults to the maintainer
+   (`r4stered`), and the PR carries the **category** label (`bug` / `enhancement`) of the
+   issue it closes. The triage **state** roles (`needs-triage`, `ready-for-agent`, …) live on
+   issues, not PRs. See [`triage-labels.md`](triage-labels.md). Backfill an existing PR with
+   `gh pr edit <n> --add-assignee r4stered --add-label <category>`.
 
 6. **Merge** once checks/review pass; delete the branch.
 
