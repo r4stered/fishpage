@@ -9,6 +9,10 @@ default:
 install:
     uv sync
 
+# Serve the catalog at http://127.0.0.1:8000/ (override source with STOCKLIST_PDF=/path).
+run:
+    fishpage
+
 # Lint and check formatting (no writes) — mirrors the CI `lint` job.
 lint:
     ruff check

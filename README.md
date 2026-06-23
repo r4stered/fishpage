@@ -27,15 +27,38 @@ incoming folder on mounted volumes.
 ## Run it
 
 ```sh
-uv run fishpage        # parses the sample Stocklist into a fresh SQLite catalog and serves it
+uv run just run        # parses the sample Stocklist into a fresh SQLite catalog and serves it
 ```
 
 Then open <http://127.0.0.1:8000/> for the catalog grid, or `GET /catalog` for JSON.
-Run the tests with `uv run pytest`.
 
 The walking skeleton rebuilds the catalog from the committed sample PDF
 (`tests/fixtures/Freshwater_Stocklist_6-19-26.pdf`) on every start. Point it at another PDF
-with `STOCKLIST_PDF=/path/to.pdf uv run fishpage`.
+with `STOCKLIST_PDF=/path/to.pdf uv run just run`.
+
+## Checks
+
+[`just`](https://just.systems/) recipes are the single source of truth for the CI gate —
+the same commands run locally, in CI, and in pre-commit. `just` itself ships as a dev
+dependency (`rust-just`), so `uv sync` is all the setup you need.
+
+```sh
+uv run just check       # the full gate: lint + typecheck + test (what CI runs)
+
+uv run just lint        # ruff check + ruff format --check
+uv run just format      # ruff check --fix + ruff format (writes)
+uv run just typecheck   # ty check
+uv run just test        # pytest
+uv run just --list      # show all recipes
+```
+
+CI runs `lint`, `types`, and `test` as three required checks on every PR to `main`, so run
+`uv run just check` before pushing. Optionally install the pre-commit hooks (ruff + ty; tests
+stay in CI only) to catch issues before each commit:
+
+```sh
+uvx pre-commit install
+```
 
 ## Project docs
 
