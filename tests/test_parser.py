@@ -1,13 +1,34 @@
 from decimal import Decimal
 from pathlib import Path
 
-from fishpage.parser import parse_stocklist
+import pytest
+
+from fishpage.models import Item
+from fishpage.parser import DuplicateSkuError, check_unique_skus, parse_stocklist
 
 FIXTURE = Path(__file__).parent / "fixtures" / "Freshwater_Stocklist_6-19-26.pdf"
 
 
 def by_sku(items):
     return {item.sku: item for item in items}
+
+
+def test_duplicate_sku_within_one_stocklist_is_rejected():
+    # Two distinct rows claiming the same SKU — ON CONFLICT would silently keep only
+    # the last (ADR-0001 keys permanently on SKU; #21). The parse must fail loudly instead.
+    ornate_m = Item("110042", "M", "Bichir Ornate", Decimal("28.99"), None, 15)
+    ornate_l = Item("110042", "L", "Bichir Ornate", Decimal("49.99"), None, 4)
+
+    with pytest.raises(DuplicateSkuError):
+        check_unique_skus([ornate_m, ornate_l])
+
+
+def test_distinct_skus_pass_the_guard():
+    # The same animal at two sizes is two distinct SKUs (CONTEXT.md) — that is allowed.
+    ornate_m = Item("110042", "M", "Bichir Ornate", Decimal("28.99"), None, 15)
+    ornate_l = Item("110043", "L", "Bichir Ornate", Decimal("49.99"), None, 4)
+
+    check_unique_skus([ornate_m, ornate_l])  # does not raise
 
 
 def test_same_animal_two_sizes_are_two_items():

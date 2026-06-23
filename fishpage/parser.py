@@ -22,6 +22,25 @@ _SPECIAL_LEFT = 385.0
 _QTY_LEFT = 450.0
 
 
+class DuplicateSkuError(ValueError):
+    """A single parsed Stocklist named the same SKU on more than one row.
+
+    ADR-0001 keys permanently on SKU and CONTEXT.md states the same animal at two
+    sizes is two *distinct* SKUs, so this shouldn't happen — but if it did, the
+    store's ``ON CONFLICT(sku) DO UPDATE`` would silently keep only the last row.
+    We fail the parse instead so the data loss surfaces (see #21).
+    """
+
+
+def check_unique_skus(items: list[Item]) -> None:
+    """Raise :class:`DuplicateSkuError` if any SKU appears on more than one Item."""
+    seen: set[str] = set()
+    for item in items:
+        if item.sku in seen:
+            raise DuplicateSkuError(item.sku)
+        seen.add(item.sku)
+
+
 def parse_stocklist(path: str | Path) -> list[Item]:
     items: list[Item] = []
     with pdfplumber.open(path) as pdf:
@@ -31,6 +50,7 @@ def parse_stocklist(path: str | Path) -> list[Item]:
                 item = _row_to_item(words)
                 if item is not None:
                     items.append(item)
+    check_unique_skus(items)
     return items
 
 
