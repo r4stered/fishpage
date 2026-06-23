@@ -1,0 +1,41 @@
+# --- Python / uv ---
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.python-version
+# uv.lock IS committed — do not ignore it
+
+# Tooling caches
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# Build artifacts
+dist/
+build/
+*.egg-info/
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# SQLite datastore (lives on a mounted volume in prod; ignore local dev copies)
+*.db
+*.sqlite
+*.sqlite3
+*.db-journal
+*.db-wal
+*.db-shm
+
+# Runtime watched-folder drops (the nightly/manual Stocklist lands here)
+/data/incoming/
+
+# --- Override global gitignore: this repo DOES commit docs/ ---
+!docs/
+!docs/**
+!CLAUDE.md
+!CONTEXT.md
