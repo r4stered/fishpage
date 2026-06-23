@@ -24,9 +24,9 @@ _RETAIL_LEFT = 320.0
 _SPECIAL_LEFT = 385.0
 _QTY_LEFT = 450.0
 
-# A SKU is the supplier's six-digit identifier. A line is a data row only if its first token
-# is exactly this — not merely a token that starts with a digit, which also matches dates and
-# page-footer numbers.
+# A SKU is the supplier's six-digit identifier. A line is a non-data row (header, date, text
+# footer) when its first token isn't all digits; an all-digit token of a different length looks
+# like a mis-detected data row instead and is surfaced as a skip rather than dropped silently.
 _SKU_DIGITS = 6
 
 
@@ -81,8 +81,10 @@ def _group_words_into_rows(words):
 
 def _row_to_item(words) -> Item | None:
     sku = words[0]["text"] if words else ""
-    if not (sku.isdigit() and len(sku) == _SKU_DIGITS):
-        return None  # header / non-data line
+    if not sku.isdigit():
+        return None  # header, date, or text footer — not a data row at all
+    if len(sku) != _SKU_DIGITS:
+        raise ValueError(f"SKU {sku!r} is not {_SKU_DIGITS} digits")
 
     size_col = [w["text"] for w in words if _SIZE_LEFT <= w["x0"] < _NAME_LEFT]
     name_col = [w["text"] for w in words if _NAME_LEFT <= w["x0"] < _RETAIL_LEFT]

@@ -105,13 +105,24 @@ def test_a_malformed_row_is_skipped_not_fatal():
 
 
 def test_non_data_lines_are_not_parsed_as_items():
-    # A line whose first token merely starts with a digit (a printed date, a page-footer
-    # number) is not a data row. Row detection requires a full-length all-digit SKU, so these
-    # lines are dropped rather than minted into bogus Items.
+    # A line whose first token isn't all digits (a printed date, a header) is not a data row,
+    # so it is dropped rather than minted into a bogus Item.
     items = by_sku(parse_stocklist(MALFORMED))
 
     assert "6/19/26" not in items  # a date footer
-    assert "12345" not in items  # too short to be a SKU
+
+
+def test_wrong_length_sku_is_logged_not_silently_dropped(caplog):
+    # An all-digit token that isn't SKU length looks like a data row that got mis-detected,
+    # not a header or date. Dropping it silently could hide a real Item, so it is surfaced as a
+    # skipped row rather than ignored like a genuine non-data line.
+    with caplog.at_level(logging.WARNING, logger="fishpage.parser"):
+        items = by_sku(parse_stocklist(MALFORMED))
+
+    warnings = [r.getMessage() for r in caplog.records if r.levelno == logging.WARNING]
+
+    assert "12345" not in items
+    assert any("12345" in m for m in warnings)
 
 
 def test_non_numeric_quantity_is_skipped_not_fatal():
@@ -143,12 +154,12 @@ def test_skipped_rows_are_logged_with_sku_and_a_summary_count(caplog):
     assert any("100004" in m for m in warnings)  # non-numeric price
     assert any("100006" in m for m in warnings)  # non-numeric qty
 
-    # Non-data lines are ignored up front, not counted as skipped rows.
+    # A genuine non-data line (a date) is ignored up front, not counted as a skipped row.
     assert not any("6/19/26" in m for m in warnings)
-    assert not any("12345" in m for m in warnings)
 
-    # The batch surfaces how many rows it dropped.
-    assert any("skip" in m.lower() and "3" in m for m in warnings)
+    # The batch surfaces how many rows it dropped: the 3 unparseable data rows above plus the
+    # wrong-length token, which is treated as a mis-detected data row rather than ignored.
+    assert any("Skipped 4 unparseable" in m for m in warnings)
 
 
 def test_parses_every_row_with_unique_skus():

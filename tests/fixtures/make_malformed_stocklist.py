@@ -129,7 +129,7 @@ _ROWS = [
             (_QTY_X, "0"),
         ],
     ),
-    # Non-data line that is all-digits but not SKU length (a page-footer number).
+    # All-digit token that isn't SKU length: a mis-detected data row, surfaced as a skip.
     (
         232.0,
         [
