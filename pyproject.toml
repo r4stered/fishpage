@@ -22,6 +22,7 @@ dev = [
     "ruff",
     "ty",
     "rust-just",
+    "fpdf2>=2.8.7",
 ]
 
 [build-system]
