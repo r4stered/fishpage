@@ -52,6 +52,10 @@ groups:
               type: threshold
               expression: days
               conditions:
+                # Inclusive: the gauge reads an integer calendar-day delta, so two missed nights
+                # reads exactly 2. `gte` fires at 2-or-more; `gt` would only fire at 3+, missing
+                # the two-nights-stale case this rule is named for. (If a Grafana version rejects
+                # `gte` on a threshold expression, the equivalent is `type: gt` with `params: [1]`.)
                 - evaluator:
-                    type: gt
+                    type: gte
                     params: [2]
