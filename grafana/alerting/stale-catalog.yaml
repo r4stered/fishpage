@@ -7,10 +7,11 @@
 # Alerting). Import by pointing Grafana's alerting provisioning at this directory, or paste it into
 # Grafana Cloud's "Alert rules → New → Import".
 #
-# Metric name: Grafana Cloud ingests OTLP metrics through its Prometheus store, which rewrites dots
-# to underscores and appends the unit, so the OTel gauge `fishpage.catalog.days_since_last_ingest`
-# (unit "d") arrives as `fishpage_catalog_days_since_last_ingest_days`. Adjust if your mapping
-# differs. The datasourceUid below is `grafanacloud-prom`, the stack's Prometheus datasource.
+# Metric name: Grafana Cloud ingests OTLP metrics through its Prometheus store, which rewrites the
+# OTel gauge `fishpage.catalog.days_since_last_ingest`'s dots to underscores. This stack does NOT
+# append the unit, so it arrives bare as `fishpage_catalog_days_since_last_ingest` (confirmed in
+# Explore) — not `..._days`. The datasourceUid below is `grafanacloud-prom`, the stack's Prometheus
+# datasource.
 #
 # Threshold: N = 2 days. Ingestion is nightly, so one missed night still reads under 2 and does not
 # page on a single late supplier drop; two missed nights means the catalog is genuinely stale.
@@ -44,7 +45,7 @@ groups:
             model:
               refId: days
               instant: true
-              expr: max(fishpage_catalog_days_since_last_ingest_days)
+              expr: max(fishpage_catalog_days_since_last_ingest)
           - refId: is_stale
             datasourceUid: __expr__
             model:
