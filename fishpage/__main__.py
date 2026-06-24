@@ -10,6 +10,7 @@ same connection the app serves from, unless cloud ingestion is configured to dri
 """
 
 import os
+import socket
 import threading
 
 import uvicorn
@@ -47,12 +48,32 @@ def build_app(settings: Settings):
     return create_app(conn)
 
 
+def listening_socket(host: str, port: int) -> socket.socket:
+    """Bind the server socket the app serves on, dual-stack for an IPv6 host.
+
+    An IPv6 host (``::`` in the cloud) is bound with ``IPV6_V6ONLY`` cleared so the one socket
+    answers both stacks. The app must reach the IPv6 private network (``fly proxy``, the Cloudflare
+    Tunnel's ``[::1]``) *and* the IPv4 loopback that Fly's Machine health check probes; left to
+    uvicorn, asyncio binds an IPv6 host ``V6ONLY`` and the app goes deaf on IPv4, failing the
+    check. An IPv4 host (local dev) needs none of this.
+    """
+    family = socket.AF_INET6 if ":" in host else socket.AF_INET
+    sock = socket.socket(family, socket.SOCK_STREAM)
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    if family == socket.AF_INET6:
+        sock.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 0)
+    sock.bind((host, port))
+    sock.listen()
+    return sock
+
+
 def main():
     settings = load_settings(os.environ)
     # Configure telemetry before building the app so the providers and the catalog-freshness
     # gauge are installed when the app and its connection register against them.
     observability.configure(settings)
-    uvicorn.run(build_app(settings), host=settings.host, port=settings.port)
+    sock = listening_socket(settings.host, settings.port)
+    uvicorn.run(build_app(settings), fd=sock.fileno())
 
 
 if __name__ == "__main__":
