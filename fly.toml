@@ -21,8 +21,8 @@ primary_region = "sjc"
   PORT = "8080"
   # Listen on IPv6. With no public service, the app is reached only over `fly proxy` (Fly's private
   # network, which is IPv6-only) and the in-container Cloudflare Tunnel; a process bound to 0.0.0.0
-  # (IPv4) would reset the `fly proxy` connections. "::" accepts IPv4-mapped clients too, so
-  # cloudflared's local `http://localhost:8080` forward and the IPv4 path keep working.
+  # (IPv4) would reset the `fly proxy` connections. This socket does not accept literal IPv4
+  # loopback, so the tunnel forwards to the IPv6 loopback `http://[::1]:8080`, not localhost.
   HOST = "::"
   # Where Litestream replicates the write-ahead log. Its presence is what switches replication on,
   # so the catalog survives a redeploy. The R2 endpoint and credentials are set as Fly secrets,

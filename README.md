@@ -104,8 +104,10 @@ is deliberately no `fly.dev` URL to bypass it. One-time setup per environment:
    tunnel* → **Cloudflared**). Name it `fishpage` and copy the tunnel **token** it shows.
 2. **Route a public hostname to the local app.** On the tunnel's *Public Hostname* tab add a
    hostname on a Cloudflare-managed domain (e.g. `fishpage.example.com`) with service
-   `HTTP` → `localhost:8080`. The tunnel is remotely managed, so this routing lives in the
-   dashboard, not in the image.
+   `HTTP` → `[::1]:8080`. The IPv6 loopback is deliberate: the app binds `::` (so `fly proxy`
+   over Fly's IPv6 private network works), and that socket does not accept a literal IPv4
+   `127.0.0.1` connection — `localhost` would resolve to IPv4 and the tunnel would 502. The tunnel
+   is remotely managed, so this routing lives in the dashboard, not in the image.
 3. **Give the Machine the token as a Fly secret** — never commit it. Its presence is what starts
    the tunnel on boot:
 
