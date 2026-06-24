@@ -92,6 +92,38 @@ fly ips list                        # expect no addresses allocated
 fly proxy 8080:8080 -a fishpage     # private admin path: open http://localhost:8080/
 ```
 
+### Continuous deployment (push to `main`)
+
+A merge to `main` ships itself — no manual `fly deploy`. The CI workflow runs `lint`, `types`, and
+`test`, and only when all three pass do two further jobs run (and only on `main`, never on a PR):
+
+- **deploy** builds the image once and pushes it to GHCR tagged `:<git-sha>` and `:main`, and to
+  Fly's registry, then `fly deploy --image`s that exact SHA-tagged image to the Machine — no rebuild.
+  GHCR is private: the image bakes in the sample Stocklist, so its wholesale prices stay unpublished.
+- **release** builds the wheel and attaches it to a GitHub Release tagged `v<version>-<short-sha>`, a
+  versioned audit trail only — the rollback lever is the image, not the wheel.
+
+One secret makes this work: a Fly deploy token in the repo's GitHub Actions secrets as
+`FLY_API_TOKEN` (GHCR uses the built-in `GITHUB_TOKEN`). Mint and set it with:
+
+```sh
+fly tokens create deploy -a fishpage     # paste the output as the FLY_API_TOKEN GitHub secret
+```
+
+### Rollback
+
+A bad deploy is reverted by redeploying a prior image — seconds, no rebuild — because every `main`
+commit is pushed to the registry under its git SHA. Find the SHA to return to (any earlier `main`
+commit, or `fly releases -a fishpage`), then redeploy it:
+
+```sh
+fly deploy --app fishpage --image registry.fly.io/fishpage:<prior-git-sha>
+```
+
+The same image is mirrored at `ghcr.io/r4stered/fishpage:<prior-git-sha>` as the durable audit
+trail. Rolling back is a deploy like any other, so the running Machine swaps to the prior image
+without touching the database — Litestream restores it on boot exactly as on a forward deploy.
+
 ### Edge access (Cloudflare Tunnel + Access)
 
 The catalog shows the supplier's wholesale prices, so it must be reachable by you from any browser
