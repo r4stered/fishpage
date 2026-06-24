@@ -56,7 +56,8 @@ plus the vendors' own installers on Linux; `wrangler` is an npm global, so Node.
    it. `.env` is gitignored and never committed. It holds the Cloudflare / GitHub / Grafana provider
    tokens, the R2 state-bucket S3 keys, the Fly deploy token, and the state-encryption passphrase.
 
-   `flyctl` auth comes from `FLY_API_TOKEN` in that same `.env`, or run `fly auth login` instead.
+   Authenticate the `flyctl` CLI for bootstrap with `fly auth login` (a deploy token can create the
+   app's secrets and deploys but cannot run `apps create`). Do not put `FLY_API_TOKEN` in `.env`.
 
 ## Run it
 
