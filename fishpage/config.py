@@ -9,8 +9,11 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
-_REPO_ROOT = Path(__file__).resolve().parent.parent
-DEFAULT_PDF = _REPO_ROOT / "tests" / "fixtures" / "Freshwater_Stocklist_6-19-26.pdf"
+_PACKAGE_ROOT = Path(__file__).resolve().parent
+_REPO_ROOT = _PACKAGE_ROOT.parent
+# Shipped as package data so the wheel-only deploy image, which has no source tree, can seed the
+# catalog from it on boot.
+DEFAULT_PDF = _PACKAGE_ROOT / "data" / "Freshwater_Stocklist_6-19-26.pdf"
 DEFAULT_DB = _REPO_ROOT / "fishpage.db"
 DEFAULT_INCOMING = _REPO_ROOT / "data" / "incoming"
 DEFAULT_PROCESSED = _REPO_ROOT / "data" / "processed"

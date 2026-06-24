@@ -8,10 +8,11 @@ from pathlib import Path
 import pytest
 
 import fishpage.ingest as ingest_mod
+from fishpage.config import DEFAULT_PDF
 from fishpage.ingest import _ingest_pass, ingest_pending, stocklist_date
 from fishpage.store import all_items, open_store
 
-FIXTURE = Path(__file__).parent / "fixtures" / "Freshwater_Stocklist_6-19-26.pdf"
+FIXTURE = DEFAULT_PDF
 
 
 def _drop(incoming: Path, name: str) -> Path:

@@ -53,8 +53,9 @@ uv run just run        # serves a local SQLite catalog, seeding it from the samp
 Then open <http://127.0.0.1:8000/> for the catalog grid, or `GET /catalog` for JSON.
 
 The catalog lives in a local SQLite file (`fishpage.db`) that persists across restarts. The first
-run seeds it from the committed sample PDF (`tests/fixtures/Freshwater_Stocklist_6-19-26.pdf`);
-later runs reuse whatever is already there. Seed from another PDF into an empty catalog with
+run seeds it from the committed sample PDF (`fishpage/data/Freshwater_Stocklist_6-19-26.pdf`),
+which ships inside the package so the deploy image can seed from it too; later runs reuse whatever
+is already there. Seed from another PDF into an empty catalog with
 `STOCKLIST_PDF=/path/to.pdf uv run just run`, or point at a different database file with
 `FISHPAGE_DB=/path/to.db`.
 
@@ -68,6 +69,30 @@ credentials. The cloud deploy switches them on through the environment: `LITESTR
 (Litestream replication to Cloudflare R2), `OTEL_EXPORTER_OTLP_ENDPOINT` (telemetry export), and
 `FISHPAGE_CLOUD_INGEST` (drive ingestion from the authenticated upload page instead of the local
 watched folder).
+
+## Deploy
+
+The deploy unit is a single multi-stage Docker image: a builder stage `uv build`s the wheel, and a
+slim final stage installs only that wheel — no source tree, no dev dependencies. Build and run it
+locally with one command each:
+
+```sh
+docker build -t fishpage .
+docker run --rm -p 8080:8080 fishpage     # then open http://127.0.0.1:8080/
+```
+
+In the cloud the image runs on a single always-on [Fly.io](https://fly.io/) Machine (`fly.toml`).
+No public IP is allocated and no service ports are published, so there is no internet-reachable
+origin — the only way in is `fly proxy` over Fly's private network:
+
+```sh
+fly deploy                          # build and release the image to the Machine
+fly ips list                        # expect no addresses allocated
+fly proxy 8080:8080 -a fishpage     # then open http://localhost:8080/
+```
+
+The edge login that fronts this private origin (a Cloudflare Tunnel + Access) arrives in a later
+slice; until then the origin stays private by construction.
 
 ## Checks
 

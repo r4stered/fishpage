@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 from fpdf import FPDF
 
+from fishpage.config import DEFAULT_PDF
 from fishpage.models import Item
 from fishpage.parser import (
     ColumnLayout,
@@ -14,7 +15,7 @@ from fishpage.parser import (
     parse_stocklist,
 )
 
-FIXTURE = Path(__file__).parent / "fixtures" / "Freshwater_Stocklist_6-19-26.pdf"
+FIXTURE = DEFAULT_PDF
 MALFORMED = Path(__file__).parent / "fixtures" / "malformed_rows.pdf"
 
 

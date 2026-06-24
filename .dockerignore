@@ -1,0 +1,20 @@
+# Keep the build context small. The wheel is built from pyproject.toml, uv.lock, and the fishpage
+# package; nothing else is needed to produce it, and the final image installs only that wheel.
+.git/
+.github/
+.venv/
+.vscode/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+coverage.xml
+htmlcov/
+dist/
+build/
+*.egg-info/
+tests/
+docs/
+*.db
+*.sqlite*
+.DS_Store
