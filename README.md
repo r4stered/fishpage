@@ -26,7 +26,9 @@ livestock to order. Not a public storefront.
   set `-`/`S`/`M`/`L`/`Jumbo`; per
   [ADR 0002](docs/adr/0002-size-column-is-overloaded.md) packaging-unit rows (e.g. `POTTED`)
   match no grade. Every control combines.
-- Rebuilds the catalog from a configured Stocklist PDF on start, then **watches an incoming
+- **Persists the catalog across restarts**: the SQLite file is never deleted on boot. An empty
+  catalog is seeded once from the configured sample Stocklist PDF; a catalog that already holds
+  Items is reused as-is. It then **watches an incoming
   folder**: a Stocklist PDF dropped into it is parsed and reconciled into the live catalog and
   moved aside. A polling trigger over a trigger-agnostic core keeps the drop reliable on a
   mounted volume; the cloud deployment drives the same core from an authenticated upload page
@@ -45,19 +47,27 @@ ingested through an authenticated upload page rather than the local watched fold
 ## Run it
 
 ```sh
-uv run just run        # parses the sample Stocklist into a fresh SQLite catalog and serves it
+uv run just run        # serves a local SQLite catalog, seeding it from the sample Stocklist if empty
 ```
 
 Then open <http://127.0.0.1:8000/> for the catalog grid, or `GET /catalog` for JSON.
 
-The walking skeleton rebuilds the catalog from the committed sample PDF
-(`tests/fixtures/Freshwater_Stocklist_6-19-26.pdf`) on every start. Point it at another PDF
-with `STOCKLIST_PDF=/path/to.pdf uv run just run`.
+The catalog lives in a local SQLite file (`fishpage.db`) that persists across restarts. The first
+run seeds it from the committed sample PDF (`tests/fixtures/Freshwater_Stocklist_6-19-26.pdf`);
+later runs reuse whatever is already there. Seed from another PDF into an empty catalog with
+`STOCKLIST_PDF=/path/to.pdf uv run just run`, or point at a different database file with
+`FISHPAGE_DB=/path/to.db`.
 
 While it runs, drop a Stocklist PDF into `data/incoming/` (named `..._M-D-YY.pdf` so its date
 is read from the filename) and the catalog reconciles it within one poll, moving the file to
 `data/processed/`. Override the locations and cadence with `INCOMING_DIR`, `PROCESSED_DIR`, and
 `INGEST_POLL_SECONDS`.
+
+Every cloud dependency is opt-in and defaults off, so the commands above need no cloud
+credentials. The cloud deploy switches them on through the environment: `LITESTREAM_REPLICA_URL`
+(Litestream replication to Cloudflare R2), `OTEL_EXPORTER_OTLP_ENDPOINT` (telemetry export), and
+`FISHPAGE_CLOUD_INGEST` (drive ingestion from the authenticated upload page instead of the local
+watched folder).
 
 ## Checks
 
