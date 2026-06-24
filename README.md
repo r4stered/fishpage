@@ -86,11 +86,16 @@ No public IP is allocated and no service ports are published, so there is no int
 origin. Administration goes over `fly proxy` on Fly's private network; the public reaches the app
 only through the Cloudflare Tunnel below.
 
+Day-to-day administration runs through the `ops` recipes (`just --list`):
+
 ```sh
-fly deploy                          # build and release the image to the Machine
-fly ips list                        # expect no addresses allocated
-fly proxy 8080:8080 -a fishpage     # private admin path: open http://localhost:8080/
+just ips        # expect no addresses allocated — no public origin
+just proxy      # private admin path: open http://localhost:8080/
+just logs       # tail the Machine's logs
+just status     # the Machine's current state
 ```
+
+There is deliberately no `deploy` recipe — see *Continuous deployment* below.
 
 ### Continuous deployment (push to `main`)
 
@@ -114,11 +119,13 @@ fly tokens create deploy -a fishpage     # paste the output as the FLY_API_TOKEN
 
 A bad deploy is reverted by redeploying a prior image — seconds, no rebuild — because every `main`
 commit is pushed to the registry under its git SHA. Find the SHA to return to (any earlier `main`
-commit, or `fly releases -a fishpage`), then redeploy it:
+commit, or `just releases`), then redeploy it:
 
 ```sh
-fly deploy --app fishpage --image registry.fly.io/fishpage:<prior-git-sha>
+just rollback <prior-git-sha>
 ```
+
+This is the only sanctioned manual deploy — every other release ships itself on merge to `main`.
 
 The same image is mirrored at `ghcr.io/r4stered/fishpage:<prior-git-sha>` as the durable audit
 trail. Rolling back is a deploy like any other, so the running Machine swaps to the prior image
@@ -190,9 +197,9 @@ sample Stocklist as usual; from then on each boot restores the latest snapshot. 
 round-trip survives a redeploy:
 
 ```sh
-fly proxy 8080:8080 -a fishpage     # ingest a Stocklist through the running app
-fly deploy                          # redeploy onto a fresh, blank disk
-fly proxy 8080:8080 -a fishpage     # the ingested data is still there
+just proxy                          # ingest a Stocklist through the running app
+git commit --allow-empty -m redeploy && git push   # a merge to main redeploys onto a fresh disk
+just proxy                          # the ingested data is still there
 ```
 
 Replication is opt-in via `LITESTREAM_REPLICA_URL`, which only the cloud deploy sets, so

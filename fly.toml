@@ -5,11 +5,13 @@
 # Tunnel: cloudflared (baked into the image) dials out to Cloudflare's edge, which enforces a login
 # + allowlist, then forwards authenticated requests to the local app. The tunnel token is a Fly
 # secret, CLOUDFLARE_TUNNEL_TOKEN, never committed. Administration still goes over Fly's private
-# WireGuard network with `fly proxy`:
+# WireGuard network; the `ops` recipes in the justfile wrap the common commands:
 #
-#     fly deploy                          # build and release the image to the Machine
-#     fly ips list                        # expect no v4/v6 addresses allocated
-#     fly proxy 8080:8080 -a fishpage     # private admin path: browse http://localhost:8080/
+#     just ips        # expect no v4/v6 addresses allocated — no public origin
+#     just proxy      # private admin path: browse http://localhost:8080/
+#     just logs       # tail the Machine's logs
+#
+# Releases ship on merge to main; the only manual deploy is `just rollback <sha>`.
 
 app = "fishpage"
 primary_region = "sjc"
