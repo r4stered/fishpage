@@ -7,10 +7,8 @@
 #   CLOUDFLARE_TUNNEL_TOKEN  Run a Cloudflare Tunnel as the only public ingress. The Machine has no
 #                            public origin, so cloudflared dials out to Cloudflare's edge — which
 #                            enforces the login + allowlist — and forwards requests to the local
-#                            app. Run in the background; tini (PID 1) forwards the stop signal to it
-#                            as well as to the app, so on a deploy it deregisters its tunnel
-#                            connection rather than being killed mid-flight. The app stays the main
-#                            long-running process, so its exit is what stops the container.
+#                            app. Backgrounded; the app process below stays in the foreground as the
+#                            Machine's main process, so its exit is what stops the container.
 #
 #   LITESTREAM_REPLICA_URL   Restore the database from the R2 replica (a no-op on the first boot,
 #                            when the replica is still empty — the app then seeds from the sample
@@ -22,11 +20,7 @@
 set -e
 
 if [ -n "$CLOUDFLARE_TUNNEL_TOKEN" ]; then
-    # Grace period kept shorter than the Machine's kill_timeout so cloudflared finishes unregistering
-    # its edge connections on stop. cloudflared's default is 30s; were it still mid-shutdown when Fly
-    # force-kills the Machine, the edge would keep routing to the dead connector and return 502s until
-    # the next restart.
-    TUNNEL_GRACE_PERIOD=5s cloudflared tunnel --no-autoupdate run --token "$CLOUDFLARE_TUNNEL_TOKEN" &
+    cloudflared tunnel --no-autoupdate run --token "$CLOUDFLARE_TUNNEL_TOKEN" &
 fi
 
 if [ -n "$LITESTREAM_REPLICA_URL" ]; then
