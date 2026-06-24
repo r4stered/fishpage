@@ -94,6 +94,40 @@ fly proxy 8080:8080 -a fishpage     # then open http://localhost:8080/
 The edge login that fronts this private origin (a Cloudflare Tunnel + Access) arrives in a later
 slice; until then the origin stays private by construction.
 
+### Durability (Litestream → R2)
+
+The Fly Machine's disk is ephemeral — it starts blank on every boot. Durability comes from
+[Litestream](https://litestream.io/): it is the image entrypoint, restores the database from a
+Cloudflare R2 bucket before serving, and then streams the write-ahead log back to R2 for as long
+as the app runs. One-time setup per environment:
+
+1. **Create the R2 bucket** and an API token scoped to it (Cloudflare dashboard → R2, or
+   `wrangler r2 bucket create fishpage-db`). The bucket name and prefix must match
+   `LITESTREAM_REPLICA_URL` in `fly.toml` (`s3://fishpage-db/catalog`).
+2. **Set the R2 endpoint and credentials as Fly secrets** — never commit them. The endpoint is
+   `https://<account-id>.r2.cloudflarestorage.com`:
+
+   ```sh
+   fly secrets set \
+     LITESTREAM_R2_ENDPOINT="https://<account-id>.r2.cloudflarestorage.com" \
+     LITESTREAM_ACCESS_KEY_ID="<r2-token-id>" \
+     LITESTREAM_SECRET_ACCESS_KEY="<r2-token-secret>" \
+     -a fishpage
+   ```
+
+On the first deploy the bucket is empty, so the restore is a no-op and the app seeds from the
+sample Stocklist as usual; from then on each boot restores the latest snapshot. Confirm the
+round-trip survives a redeploy:
+
+```sh
+fly proxy 8080:8080 -a fishpage     # ingest a Stocklist through the running app
+fly deploy                          # redeploy onto a fresh, blank disk
+fly proxy 8080:8080 -a fishpage     # the ingested data is still there
+```
+
+Replication is opt-in via `LITESTREAM_REPLICA_URL`, which only the cloud deploy sets, so
+`just run`, `docker run`, and the test suite operate on a plain local SQLite file with no R2.
+
 ## Checks
 
 [`just`](https://just.systems/) recipes are the single source of truth for the CI gate —

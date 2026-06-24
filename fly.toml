@@ -20,6 +20,10 @@ primary_region = "sjc"
   # private network, which is IPv6-only; a process bound to 0.0.0.0 (IPv4) would reset those
   # connections. "::" accepts IPv4-mapped clients too, so the local IPv4 path keeps working.
   HOST = "::"
+  # Where Litestream replicates the write-ahead log. Its presence is what switches replication on,
+  # so the catalog survives a redeploy. The R2 endpoint and credentials are set as Fly secrets,
+  # never committed: LITESTREAM_R2_ENDPOINT, LITESTREAM_ACCESS_KEY_ID, LITESTREAM_SECRET_ACCESS_KEY.
+  LITESTREAM_REPLICA_URL = "s3://fishpage-db/catalog"
 
 # A single Machine that never auto-stops. There is deliberately no [http_service] or
 # [[services]] block: those publish to a public IP, which is exactly what this slice must not do.
