@@ -1,0 +1,6 @@
+# Copy to backend.hcl (gitignored) and fill in. Passed to `tofu init -backend-config=backend.hcl`
+# by the wrapper. The bucket is the one hand-created bootstrap step; create it once with
+# `wrangler r2 bucket create fishpage-tfstate`. State-bucket credentials come from the environment
+# (AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY set to an R2 token's S3 keys), not this file.
+bucket    = "fishpage-tfstate"
+endpoints = { s3 = "https://0123456789abcdef0123456789abcdef.r2.cloudflarestorage.com" }

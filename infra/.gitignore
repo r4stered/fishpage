@@ -1,0 +1,9 @@
+# Filled-in inputs and any state that escapes the remote backend never get committed.
+terraform.tfvars
+*.auto.tfvars
+backend.hcl
+.terraform/
+.terraform.tfstate.lock.info
+*.tfstate
+*.tfstate.*
+crash.log

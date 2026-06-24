@@ -97,6 +97,23 @@ just status     # the Machine's current state
 
 There is deliberately no `deploy` recipe — see *Continuous deployment* below.
 
+### First-time bring-up (one command)
+
+Standing the whole deploy up from nothing — the R2 bucket and token, the Cloudflare Tunnel, DNS and
+Access, the GitHub deploy secret, the Grafana OTLP token and stale-catalog alert, and the first Fly
+deploy — is a single re-runnable command, not a manual tour of four dashboards. OpenTofu in
+[`infra/`](infra/) owns the declarative cloud resources and a thin `flyctl` wrapper owns the Fly
+bits; every derived secret is wired machine-to-machine, never copy-pasted.
+
+```sh
+just bootstrap          # create app → apply cloud infra → wire Fly secrets → first deploy → verify
+just bootstrap-plan     # dry run: prove a re-apply is a clean no-op
+```
+
+Fill in the gitignored `infra/terraform.tfvars` + `infra/backend.hcl` and export a few credentials
+first — see [`infra/README.md`](infra/README.md) for the full prerequisite list and bring-up order.
+The subsections below explain what each automated piece does and how to drive it by hand if needed.
+
 ### Continuous deployment (push to `main`)
 
 A merge to `main` ships itself — no manual `fly deploy`. The CI workflow runs `lint`, `types`, and
@@ -179,8 +196,8 @@ Cloudflare R2 bucket before serving, and then streams the write-ahead log back t
 as the app runs. One-time setup per environment:
 
 1. **Create the R2 bucket** and an API token scoped to it (Cloudflare dashboard → R2, or
-   `wrangler r2 bucket create fishpage-db`). The bucket name and prefix must match
-   `LITESTREAM_REPLICA_URL` in `fly.toml` (`s3://fishpage-db/catalog`).
+   `wrangler r2 bucket create fishpage-litestream`). The bucket name and prefix must match
+   `LITESTREAM_REPLICA_URL` in `fly.toml` (`s3://fishpage-litestream/catalog`).
 2. **Set the R2 endpoint and credentials as Fly secrets** — never commit them. The endpoint is
    `https://<account-id>.r2.cloudflarestorage.com`:
 
