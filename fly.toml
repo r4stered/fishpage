@@ -28,6 +28,11 @@ primary_region = "sjc"
   # so the catalog survives a redeploy. The R2 endpoint and credentials are set as Fly secrets,
   # never committed: LITESTREAM_R2_ENDPOINT, LITESTREAM_ACCESS_KEY_ID, LITESTREAM_SECRET_ACCESS_KEY.
   LITESTREAM_REPLICA_URL = "s3://fishpage-litestream/catalog"
+  # OTLP wire protocol for telemetry export. Non-secret config, so it lives here rather than in Fly
+  # secrets. What actually switches export on is OTEL_EXPORTER_OTLP_ENDPOINT, set as a Fly secret
+  # alongside the auth header OTEL_EXPORTER_OTLP_HEADERS (Authorization=Basic <base64>); with no
+  # endpoint the exporter is a no-op and this value is inert.
+  OTEL_EXPORTER_OTLP_PROTOCOL = "http/protobuf"
 
 # A single Machine that never auto-stops. There is deliberately no [http_service] or
 # [[services]] block: those publish to a public IP, which is exactly what this slice must not do.
