@@ -10,8 +10,10 @@ locals {
   r2_access_key_id     = cloudflare_account_token.r2.id
   r2_secret_access_key = sha256(cloudflare_account_token.r2.value)
 
-  # Grafana Cloud's OTLP gateway takes Basic auth of "<instance id>:<token>".
-  otlp_endpoint = data.grafana_cloud_stack.this.otlp_url
+  # Grafana Cloud's OTLP gateway takes Basic auth of "<instance id>:<token>". The stack attribute is
+  # the gateway base without the "/otlp" path the OTLP/HTTP exporter posts under, so append it (and
+  # guard against a double suffix if the upstream value ever starts including it).
+  otlp_endpoint = "${trimsuffix(data.grafana_cloud_stack.this.otlp_url, "/otlp")}/otlp"
   otlp_headers  = "Authorization=Basic ${base64encode("${data.grafana_cloud_stack.this.id}:${grafana_cloud_access_policy_token.otlp.token}")}"
 }
 
