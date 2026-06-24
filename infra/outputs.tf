@@ -7,8 +7,8 @@
 # the token's value. Both are deterministic from the token, so they never appear in a dashboard.
 locals {
   r2_endpoint          = "https://${var.cloudflare_account_id}.r2.cloudflarestorage.com"
-  r2_access_key_id     = cloudflare_api_token.r2.id
-  r2_secret_access_key = sha256(cloudflare_api_token.r2.value)
+  r2_access_key_id     = cloudflare_account_token.r2.id
+  r2_secret_access_key = sha256(cloudflare_account_token.r2.value)
 
   # Grafana Cloud's OTLP gateway takes Basic auth of "<instance id>:<token>".
   otlp_endpoint = data.grafana_cloud_stack.this.otlp_url

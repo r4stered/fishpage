@@ -23,11 +23,13 @@ locals {
   ])
 }
 
-# A token scoped to just R2 storage write — nothing else on the account. Litestream speaks R2's
-# S3-compatible API, whose Access Key ID is the token's id and whose Secret Access Key is the
-# SHA-256 of the token's value; both are derived in outputs.tf and pushed to Fly as secrets.
-resource "cloudflare_api_token" "r2" {
-  name = "${var.fly_app}-r2-litestream"
+# An account-owned token scoped to just R2 storage write — nothing else on the account, and not tied
+# to a person. Litestream speaks R2's S3-compatible API, whose Access Key ID is the token's id and
+# whose Secret Access Key is the SHA-256 of the token's value; both are derived in outputs.tf and
+# pushed to Fly as secrets.
+resource "cloudflare_account_token" "r2" {
+  account_id = var.cloudflare_account_id
+  name       = "${var.fly_app}-r2-litestream"
   policies = [{
     effect            = "allow"
     permission_groups = [{ id = local.r2_write_permission_group }]
