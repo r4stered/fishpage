@@ -36,6 +36,16 @@ wrangler r2 bucket create fishpage-tfstate     # once, by hand
 state bucket's S3 credentials come from `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` in the
 environment.
 
+## Install the tools
+
+```sh
+uv sync               # `just` (via rust-just) and the Python toolchain
+just install-tools    # OpenTofu, flyctl, jq, wrangler — idempotent, skips what's present
+```
+
+`install-tools` uses Homebrew on macOS and the distro package manager (apt/dnf/yum/zypper/pacman/apk)
+plus the vendors' own installers on Linux; `wrangler` is an npm global, so Node.js must be present.
+
 ## One-time inputs
 
 1. **Non-secret values** → `terraform.tfvars` (copy from `terraform.tfvars.example`): account/zone

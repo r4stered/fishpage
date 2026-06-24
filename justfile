@@ -79,13 +79,64 @@ rollback sha:
 
 # --- bootstrap: stand up the whole cloud deploy from nothing, in one command ---
 #
-# Prerequisites (one-time): create the R2 state bucket by hand, copy infra/backend.hcl.example to
-# infra/backend.hcl and infra/terraform.tfvars.example to infra/terraform.tfvars and fill both, then
-# export the auth the providers and the encrypted state backend read from the environment:
+# Prerequisites (one-time): run `just install-tools`, create the R2 state bucket by hand, copy
+# infra/backend.hcl.example to infra/backend.hcl and infra/terraform.tfvars.example to
+# infra/terraform.tfvars and fill both, then export the auth the providers and the encrypted state
+# backend read from the environment:
 #   CLOUDFLARE_API_TOKEN GITHUB_TOKEN GRAFANA_CLOUD_ACCESS_POLICY_TOKEN GRAFANA_AUTH
 #   AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY            # R2 state-bucket S3 keys
 #   TF_VAR_fly_deploy_token TF_VAR_state_encryption_passphrase
 # plus an authenticated flyctl (FLY_API_TOKEN or `fly auth login`). See infra/README.md.
+
+# macOS uses Homebrew; Linux uses the distro package manager for jq and the vendors' own installers
+# for OpenTofu and flyctl (neither ships in default distro repos). wrangler is an npm global on both;
+# `just` itself comes from `uv sync`. Idempotent: skips anything already on PATH.
+# Install the non-Python binaries bootstrap needs (OpenTofu, flyctl, jq, wrangler).
+[group('bootstrap')]
+install-tools:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    have() { command -v "$1" >/dev/null 2>&1; }
+    os="$(uname -s)"
+
+    brew_install() { brew list "$1" >/dev/null 2>&1 || brew install "$1"; }
+    linux_pkg_install() {
+        if   have apt-get; then sudo apt-get update -qq && sudo apt-get install -y "$1"
+        elif have dnf;     then sudo dnf install -y "$1"
+        elif have yum;     then sudo yum install -y "$1"
+        elif have zypper;  then sudo zypper --non-interactive install "$1"
+        elif have pacman;  then sudo pacman -S --noconfirm "$1"
+        elif have apk;     then sudo apk add "$1"
+        else echo "no supported Linux package manager found; install $1 manually" >&2; return 1
+        fi
+    }
+
+    if have jq; then echo "jq: present"
+    elif [ "$os" = Darwin ]; then echo "jq: installing"; brew_install jq
+    else echo "jq: installing"; linux_pkg_install jq
+    fi
+
+    if have tofu; then echo "tofu: present"
+    elif [ "$os" = Darwin ]; then echo "tofu: installing"; brew_install opentofu
+    else
+        echo "tofu: installing via get.opentofu.org (standalone)"
+        curl --proto '=https' --tlsv1.2 -fsSL https://get.opentofu.org/install-opentofu.sh -o /tmp/install-opentofu.sh
+        chmod +x /tmp/install-opentofu.sh
+        /tmp/install-opentofu.sh --install-method standalone
+        rm -f /tmp/install-opentofu.sh
+    fi
+
+    if have flyctl; then echo "flyctl: present"
+    elif [ "$os" = Darwin ]; then echo "flyctl: installing"; brew_install flyctl
+    else echo "flyctl: installing via fly.io/install.sh"; curl -fsSL https://fly.io/install.sh | sh
+    fi
+
+    if have wrangler; then echo "wrangler: present"
+    elif have npm; then echo "wrangler: installing"; npm install -g wrangler
+    else echo "wrangler needs npm (install Node.js first): https://nodejs.org" >&2; exit 1
+    fi
+
+    echo "tools ready — restart your shell if a freshly installed tool isn't found (Linux installers add to ~/.fly or /usr/local/bin)."
 
 # Create app, apply cloud infra, wire secrets into Fly, first deploy, verify — re-runnable.
 [group('bootstrap')]
@@ -124,6 +175,9 @@ _bootstrap-preflight:
     #!/usr/bin/env bash
     set -euo pipefail
     missing=()
+    for c in tofu flyctl jq; do
+        command -v "$c" >/dev/null 2>&1 || missing+=("$c binary (run: just install-tools)")
+    done
     for v in CLOUDFLARE_API_TOKEN GITHUB_TOKEN GRAFANA_CLOUD_ACCESS_POLICY_TOKEN GRAFANA_AUTH \
              AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY TF_VAR_fly_deploy_token \
              TF_VAR_state_encryption_passphrase; do
