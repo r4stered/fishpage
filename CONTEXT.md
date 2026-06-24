@@ -54,11 +54,22 @@ _Avoid_: type, group, classifier (a Classifier is enriched care data, a differen
 
 **Classifier**:
 A care attribute we attach to an Item that is not in the Stocklist — e.g. difficulty of care,
-plant safety, aggression. Drawn from a flexible registry of classifier definitions (so new ones
-can be added without a schema change) and, where possible, enum-valued so it can double as a filter.
+plant safety, aggression. Where possible a Classifier is enum-valued, so it doubles as a browse
+filter. The set of Classifiers is a fixed, curated vocabulary — extending it is a deliberate change,
+not an open-ended runtime registry. Each Item's Classifier value carries its own Provenance, so a
+human correction to one attribute stands even while the rest remain `ai-generated`.
 
 **Enrichment**:
-The best-effort process of populating an Item's image and Classifiers from an external fish-info
-source, AI-assisted for name-matching and field extraction. Coverage is partial: oddball species
-may have no source page and fall back to manual entry. Runs on first sight of a new SKU and on demand.
+The best-effort process of populating an Item's image and Classifiers from outside the Stocklist.
+Care Classifiers are AI-generated (the LLM normalises the Item's trade name to a species and emits
+enum-valued care attributes); the image comes from an external source keyed by that species, with
+manual upload as the fallback. Coverage is partial: oddball species may have no usable source and
+fall back to manual entry. Runs on first sight of a new SKU and on demand.
 _Avoid_: scraping (one possible mechanism, not the concept)
+
+**Provenance**:
+The recorded origin of an enriched value on an Item — one of `manual`, `wikimedia`, or
+`ai-generated` — carried per attribute, so the catalog can show which Classifiers and images are a
+human fact versus a best-effort AI guess. `manual` is authoritative: re-running Enrichment never
+overwrites a `manual` value, the way an Item's SKU is never deleted.
+_Avoid_: confidence, score (Provenance is the source of a value, not a numeric certainty about it)
