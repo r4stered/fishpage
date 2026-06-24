@@ -33,9 +33,9 @@ resource "cloudflare_account_token" "r2" {
   policies = [{
     effect            = "allow"
     permission_groups = [{ id = local.r2_write_permission_group }]
-    resources = {
+    resources = jsonencode({
       "com.cloudflare.api.account.${var.cloudflare_account_id}" = "*"
-    }
+    })
   }]
 }
 
