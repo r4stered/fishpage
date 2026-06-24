@@ -7,8 +7,10 @@
 #   CLOUDFLARE_TUNNEL_TOKEN  Run a Cloudflare Tunnel as the only public ingress. The Machine has no
 #                            public origin, so cloudflared dials out to Cloudflare's edge — which
 #                            enforces the login + allowlist — and forwards requests to the local
-#                            app. Backgrounded; the app process below stays in the foreground as the
-#                            Machine's main process, so its exit is what stops the container.
+#                            app. Run in the background; tini (PID 1) forwards the stop signal to it
+#                            as well as to the app, so on a deploy it deregisters its tunnel
+#                            connection rather than being killed mid-flight. The app stays the main
+#                            long-running process, so its exit is what stops the container.
 #
 #   LITESTREAM_REPLICA_URL   Restore the database from the R2 replica (a no-op on the first boot,
 #                            when the replica is still empty — the app then seeds from the sample

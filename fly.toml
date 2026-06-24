@@ -16,6 +16,10 @@
 app = "fishpage"
 primary_region = "sjc"
 
+# Headroom for a graceful stop on deploy: cloudflared deregisters its tunnel connection and
+# Litestream flushes a final WAL segment to R2 before the Machine is force-killed.
+kill_timeout = "15s"
+
 [build]
   dockerfile = "Dockerfile"
 
