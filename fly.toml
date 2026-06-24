@@ -19,6 +19,10 @@ primary_region = "sjc"
 
 [env]
   PORT = "8080"
+  # Listen on IPv6. With no public service, the only path to the app is `fly proxy` over Fly's
+  # private network, which is IPv6-only; a process bound to 0.0.0.0 (IPv4) would reset those
+  # connections. "::" accepts IPv4-mapped clients too, so the local IPv4 path keeps working.
+  HOST = "::"
 
 # A single Machine that never auto-stops. There is deliberately no [http_service] or
 # [[services]] block: those publish to a public IP, which is exactly what this slice must not do.
