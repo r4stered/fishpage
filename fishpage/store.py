@@ -12,6 +12,7 @@ from datetime import date
 from decimal import Decimal
 from pathlib import Path
 
+from fishpage import observability
 from fishpage.models import Item
 
 _log = logging.getLogger(__name__)
@@ -86,6 +87,7 @@ def reconcile(conn: sqlite3.Connection, items: list[Item], stocklist_date: date)
                 item.name,
                 prior_name,
             )
+            observability.record_reuse_flag()
         params.append(
             {
                 "sku": item.sku,

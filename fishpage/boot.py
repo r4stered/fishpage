@@ -58,19 +58,6 @@ def restore_database(
     return True
 
 
-def init_observability(settings: Settings) -> bool:
-    """Start the OpenTelemetry exporter when an OTLP endpoint is configured.
-
-    Returns ``True`` when telemetry export was started. With no endpoint — bare ``just run`` and
-    CI — this is a no-op returning ``False`` and the app emits no telemetry. When an endpoint *is*
-    configured it refuses to continue rather than silently drop telemetry: the exporter wiring is
-    filled in by the observability slice this seam exists for.
-    """
-    if settings.otel_endpoint is None:
-        return False
-    raise NotImplementedError("OTel exporter is configured but not yet implemented")
-
-
 def seed_if_empty(conn: sqlite3.Connection, pdf_path: Path) -> int:
     """Seed the catalog from ``pdf_path`` only when it holds no Items; otherwise do nothing.
 

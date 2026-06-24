@@ -226,3 +226,33 @@ def test_older_drop_in_a_later_pass_is_skipped(tmp_path):
     assert stored["110012"].last_seen == date(2026, 6, 26)  # not regressed
     assert stored["110012"].qty_avail == 10  # not zeroed by a stale absentee sweep
     assert stale.is_file()  # left in incoming, not silently consumed
+
+
+def test_ingest_emits_a_span(tmp_path, telemetry):
+    incoming = tmp_path / "incoming"
+    processed = tmp_path / "processed"
+    _drop(incoming, "Freshwater_Stocklist_6-19-26.pdf")
+    conn = open_store(tmp_path / "fishpage.db")
+
+    ingest_pending(conn, incoming, processed)
+
+    # A reconcile pass carries its own span, with the nested parse span beneath it.
+    names = telemetry.span_names()
+    assert "ingest_pending" in names
+    assert "parse_stocklist" in names
+
+
+def test_skipping_an_older_drop_is_counted_as_a_metric(tmp_path, telemetry):
+    incoming = tmp_path / "incoming"
+    processed = tmp_path / "processed"
+    conn = open_store(tmp_path / "fishpage.db")
+
+    _drop(incoming, "Freshwater_Stocklist_6-26-26.pdf")
+    ingest_pending(conn, incoming, processed)  # newer Stocklist applied
+
+    _drop(incoming, "Freshwater_Stocklist_6-19-26.pdf")
+    ingest_pending(conn, incoming, processed)  # older Stocklist held back
+
+    # The held-back drop is counted, so a misdated supplier export that keeps bouncing off the
+    # monotonicity guard is visible as a metric rather than only a log line.
+    assert telemetry.counter("fishpage.ingest.monotonicity_skips") == 1

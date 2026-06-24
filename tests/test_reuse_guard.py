@@ -83,6 +83,20 @@ def test_flag_is_sticky_once_raised(tmp_path):
     assert stored["110042"].reuse_flagged is True
 
 
+def test_reuse_flag_is_counted_as_a_metric(tmp_path, telemetry):
+    conn = open_store(tmp_path / "fishpage.db")
+    reconcile(conn, [ORNATE_M], JUN19)
+
+    # Same SKU reappears as a different animal: the guard fires and increments the counter, so a
+    # spike in renames is visible without scraping the warning logs. A run with no rename leaves
+    # the counter untouched.
+    reused = Item("110042", "L", "Discus Blue Diamond", Decimal("44.99"), None, 6)
+    reconcile(conn, [reused], JUN26)
+    reconcile(conn, [reused], JUL03)  # settled name, no fresh rename
+
+    assert telemetry.counter("fishpage.ingest.reuse_flags") == 1
+
+
 def test_first_sight_of_a_sku_is_never_flagged(tmp_path):
     conn = open_store(tmp_path / "fishpage.db")
 

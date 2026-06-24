@@ -198,6 +198,22 @@ fly proxy 8080:8080 -a fishpage     # the ingested data is still there
 Replication is opt-in via `LITESTREAM_REPLICA_URL`, which only the cloud deploy sets, so
 `just run`, `docker run`, and the test suite operate on a plain local SQLite file with no R2.
 
+### Observability (OpenTelemetry → Grafana Cloud)
+
+The app is instrumented with OpenTelemetry — structured logs, traces, and metrics — exported over
+OTLP/HTTP to the Grafana Cloud free tier. Export is opt-in via `OTEL_EXPORTER_OTLP_ENDPOINT` (set
+as a Fly secret alongside the standard OTLP auth headers in `OTEL_EXPORTER_OTLP_HEADERS`); with no
+endpoint, `just run`, `docker run`, and the test suite record telemetry in-process but export
+nothing, so they stay credential-free.
+
+FastAPI requests are auto-instrumented, and parse and ingest carry manual spans. Beyond request
+latency, the app emits the domain signals that actually de-risk the catalog: rows parsed vs
+skipped, reuse-guard flags, monotonicity skips, and `days_since_last_ingest`. The one alert that
+matters — **no successful ingest in 2 days**, the catalog silently going stale — is provisioned as
+code in [`grafana/alerting/stale-catalog.yaml`](grafana/alerting/stale-catalog.yaml), keyed on that
+last gauge. A `/healthz` endpoint returns `{"status": "ok"}` and is wired to the Fly Machine health
+check in `fly.toml`. See [ADR 0009](docs/adr/0009-opentelemetry-grafana-cloud-stale-catalog-alert.md).
+
 ## Checks
 
 [`just`](https://just.systems/) recipes are the single source of truth for the CI gate —

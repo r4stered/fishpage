@@ -236,6 +236,24 @@ def test_skipped_rows_are_logged_with_sku_and_a_summary_count(caplog):
     assert any("Skipped 5 unparseable" in m for m in warnings)
 
 
+def test_parse_records_rows_parsed_and_skipped(telemetry):
+    # The malformed Stocklist carries 5 rows the parser can't read; the rest parse. Both the
+    # kept count and the dropped count are emitted as metrics so a Stocklist that suddenly sheds
+    # rows is visible without reading logs.
+    items = parse_stocklist(MALFORMED)
+
+    assert telemetry.counter("fishpage.stocklist.rows_parsed") == len(items)
+    assert telemetry.counter("fishpage.stocklist.rows_skipped") == 5
+
+
+def test_parse_emits_a_span(telemetry):
+    parse_stocklist(MALFORMED)
+
+    # The parse is wrapped in a manual span so its latency and place in a trace are visible
+    # alongside the auto-instrumented request spans.
+    assert "parse_stocklist" in telemetry.span_names()
+
+
 def test_stocklist_with_no_header_raises(tmp_path):
     # Column positions come from the header, so a Stocklist that never carries one (a
     # truncated drop, or an unrecognised layout) cannot be aligned. Rather than guess with

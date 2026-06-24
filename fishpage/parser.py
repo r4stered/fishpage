@@ -14,6 +14,7 @@ from pathlib import Path
 
 import pdfplumber
 
+from fishpage import observability
 from fishpage.models import Item
 
 _log = logging.getLogger(__name__)
@@ -128,6 +129,11 @@ def check_unique_skus(items: list[Item]) -> None:
 
 
 def parse_stocklist(path: str | Path) -> list[Item]:
+    with observability.span("parse_stocklist"):
+        return _parse_stocklist(path)
+
+
+def _parse_stocklist(path: str | Path) -> list[Item]:
     items: list[Item] = []
     skipped = 0
     with pdfplumber.open(path) as pdf:
@@ -153,6 +159,8 @@ def parse_stocklist(path: str | Path) -> list[Item]:
                 items.append(item)
     if skipped:
         _log.warning("Skipped %d unparseable Stocklist row(s).", skipped)
+    observability.record_rows_parsed(len(items))
+    observability.record_rows_skipped(skipped)
     check_unique_skus(items)
     return items
 

@@ -1,11 +1,8 @@
 from datetime import date
 from decimal import Decimal
 
-import pytest
-
 from fishpage.boot import (
     LITESTREAM_CONFIG,
-    init_observability,
     litestream_restore_command,
     restore_database,
     seed_if_empty,
@@ -84,16 +81,3 @@ def test_restore_runs_litestream_when_a_replica_is_configured():
 
     assert restore_database(settings, run=lambda cmd, **kw: runs.append(cmd)) is True
     assert runs == [litestream_restore_command(settings)]
-
-
-def test_observability_is_a_noop_when_no_exporter_endpoint_is_configured():
-    settings = load_settings({})
-
-    assert init_observability(settings) is False
-
-
-def test_observability_refuses_to_run_silently_when_an_endpoint_is_configured():
-    settings = load_settings({"OTEL_EXPORTER_OTLP_ENDPOINT": "https://otel.example:4317"})
-
-    with pytest.raises(NotImplementedError):
-        init_observability(settings)

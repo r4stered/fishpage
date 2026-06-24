@@ -7,6 +7,7 @@ from fastapi import FastAPI
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
+from fishpage import observability
 from fishpage.browse import SIZE_GRADES, browse
 from fishpage.models import Item
 from fishpage.render import render_catalog
@@ -29,7 +30,12 @@ def _item_dict(item: Item) -> dict:
 
 def create_app(conn: sqlite3.Connection) -> FastAPI:
     app = FastAPI(title="Fishpage")
+    observability.instrument_fastapi(app)
     app.mount("/static", StaticFiles(directory=_STATIC), name="static")
+
+    @app.get("/healthz")
+    def healthz() -> JSONResponse:
+        return JSONResponse({"status": "ok"})
 
     @app.get("/catalog")
     def catalog(
