@@ -50,6 +50,22 @@ def searchable_client(tmp_path):
     return TestClient(create_app(conn))
 
 
+def test_healthz_reports_ok(tmp_path):
+    resp = client(tmp_path).get("/healthz")
+
+    # Fly's Machine health check pings this; a 200 with a tiny body is all it needs.
+    assert resp.status_code == 200
+    assert resp.json() == {"status": "ok"}
+
+
+def test_requests_are_auto_instrumented_with_a_server_span(tmp_path, telemetry):
+    client(tmp_path).get("/catalog")
+
+    # FastAPI is auto-instrumented, so every request produces a server span carrying the route —
+    # the spine each manual parse/ingest span hangs off in a trace.
+    assert any("/catalog" in name for name in telemetry.span_names())
+
+
 def test_catalog_defaults_to_in_stock_with_shape(tmp_path):
     resp = client(tmp_path).get("/catalog")
 

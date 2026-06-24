@@ -14,6 +14,7 @@ import time
 from datetime import date
 from pathlib import Path
 
+from fishpage import observability
 from fishpage.parser import parse_stocklist
 from fishpage.store import latest_stocklist_date, reconcile
 
@@ -39,6 +40,13 @@ def ingest_pending(conn: sqlite3.Connection, incoming_dir: Path, processed_dir: 
     - **No parsed Items.** Treated as an incomplete copy, not an empty Stocklist; reconciling
       nothing would zero every SKU. It waits to settle and is retried.
     """
+    with observability.span("ingest_pending"):
+        return _ingest_pending(conn, incoming_dir, processed_dir)
+
+
+def _ingest_pending(
+    conn: sqlite3.Connection, incoming_dir: Path, processed_dir: Path
+) -> list[Path]:
     processed_dir.mkdir(parents=True, exist_ok=True)
     latest = latest_stocklist_date(conn)
 
@@ -62,6 +70,7 @@ def ingest_pending(conn: sqlite3.Connection, incoming_dir: Path, processed_dir: 
                 stocklist,
                 latest,
             )
+            observability.record_monotonicity_skip()
             continue
         items = parse_stocklist(pdf)
         if not items:

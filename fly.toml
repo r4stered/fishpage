@@ -34,3 +34,16 @@ primary_region = "sjc"
 [[vm]]
   size = "shared-cpu-1x"
   memory = "512mb"
+
+# Machine-level health check. With no public service to attach a check to, this top-level block
+# probes the app directly on its internal port, so Fly restarts a Machine whose app has wedged.
+# It hits /healthz over the loopback the app listens on; a non-200 marks the Machine unhealthy.
+[checks]
+  [checks.healthz]
+    type = "http"
+    port = 8080
+    method = "get"
+    path = "/healthz"
+    interval = "30s"
+    timeout = "5s"
+    grace_period = "10s"

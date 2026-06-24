@@ -14,8 +14,9 @@ import threading
 
 import uvicorn
 
+from fishpage import observability
 from fishpage.app import create_app
-from fishpage.boot import init_observability, seed_if_empty
+from fishpage.boot import seed_if_empty
 from fishpage.config import Settings, load_settings
 from fishpage.ingest import watch_incoming
 from fishpage.store import open_store
@@ -23,6 +24,7 @@ from fishpage.store import open_store
 
 def build_app(settings: Settings):
     conn = open_store(settings.db_path)
+    observability.track_catalog_freshness(conn)
     loaded = seed_if_empty(conn, settings.pdf_path)
     if loaded:
         print(f"Seeded {loaded} Items from {settings.pdf_path.name}")
@@ -47,7 +49,9 @@ def build_app(settings: Settings):
 
 def main():
     settings = load_settings(os.environ)
-    init_observability(settings)
+    # Configure telemetry before building the app so the providers and the catalog-freshness
+    # gauge are installed when the app and its connection register against them.
+    observability.configure(settings)
     uvicorn.run(build_app(settings), host=settings.host, port=settings.port)
 
 
