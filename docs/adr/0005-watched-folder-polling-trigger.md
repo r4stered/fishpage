@@ -8,15 +8,17 @@ automatable later without reshaping the code. We split that into a **trigger-agn
   PDF currently in `incoming` through the single upsert-by-SKU path, then move each file to `processed`.
   It knows nothing about *how* it was triggered. A folder watcher, an HTTP upload, or a queue consumer
   can all drive it unchanged.
-- **`watch_incoming(...)`** is the trigger in use today: a loop that calls `ingest_pending` and sleeps.
+- **`watch_incoming(...)`** is the **local-development** trigger: a loop that calls `ingest_pending`
+  and sleeps. The cloud deployment drives the same core from an authenticated HTTP upload instead —
+  see "Cloud uses the HTTP trigger" below.
 
 ## Poll, don't subscribe
 
-The trigger **polls** the directory on an interval rather than subscribing to filesystem events
-(inotify / `watchdog`). The deployment target is a Docker bind-mount of an Unraid volume, where inotify
-is unreliable across the mount boundary and can silently drop events — and a missed event for a
-once-a-night drop means the catalog silently goes stale, the worst failure mode here. A nightly drop has
-no latency requirement, so polling's only real cost (seconds of delay) does not matter.
+The local trigger **polls** the directory on an interval rather than subscribing to filesystem events
+(inotify / `watchdog`). A watched folder over a Docker bind-mount is where inotify is unreliable across
+the mount boundary and can silently drop events — and a missed event for a once-a-night drop means the
+catalog silently goes stale, the worst failure mode here. A nightly drop has no latency requirement, so
+polling's only real cost (seconds of delay) does not matter.
 
 Polling also makes **partial writes** self-correcting, within the limits of what the parser can detect. A
 still-copying PDF that cannot yet be opened raises; the pass logs it and leaves the file in `incoming`, so
@@ -57,6 +59,18 @@ A drop whose filename carries **no valid `M-D-YY` date** — missing, or a date-
 authoritative run-date, and inventing one (e.g. today's) would silently mis-stamp `last_seen` and
 mis-pivot the absentee sweep. `stocklist_date` therefore raises rather than guessing, and the ingestion
 pass catches that **per file** so one misnamed drop cannot wedge the others in the same pass.
+
+## Cloud uses the HTTP trigger
+
+The cloud deployment has no NAS folder to drop into and runs on an ephemeral Machine (see
+[ADR 0007](0007-deploy-to-flyio-cloud-not-unraid.md)). There, ingestion is driven by an
+**authenticated HTTP upload** — a small upload page that hands the posted Stocklist PDF to the very
+same `ingest_pending` core. This is the case the trigger-agnostic split was built for; no tested code
+changes, only the thin trigger swaps. The filesystem watcher is retained as the **local-development**
+trigger and is not run in the cloud. The monotonicity and date guards are unchanged: the upload must
+preserve the original `M-D-YY` filename (or carry an explicit date), because `last_seen` and the
+absentee sweep still pivot on the parsed Stocklist date, and `stocklist_date` still raises rather than
+guessing.
 
 ## Consequences
 
