@@ -1,12 +1,15 @@
 # Fishpage runs as a single always-on Fly Machine.
 #
 # No public IP is allocated and no service ports are published, so there is no internet-reachable
-# origin and the supplier's wholesale prices stay private. The only way in is `fly proxy` over Fly's
-# private WireGuard network:
+# origin and the supplier's wholesale prices stay private. Public access comes through a Cloudflare
+# Tunnel: cloudflared (baked into the image) dials out to Cloudflare's edge, which enforces a login
+# + allowlist, then forwards authenticated requests to the local app. The tunnel token is a Fly
+# secret, CLOUDFLARE_TUNNEL_TOKEN, never committed. Administration still goes over Fly's private
+# WireGuard network with `fly proxy`:
 #
 #     fly deploy                          # build and release the image to the Machine
 #     fly ips list                        # expect no v4/v6 addresses allocated
-#     fly proxy 8080:8080 -a fishpage     # then browse http://localhost:8080/
+#     fly proxy 8080:8080 -a fishpage     # private admin path: browse http://localhost:8080/
 
 app = "fishpage"
 primary_region = "sjc"
@@ -16,9 +19,10 @@ primary_region = "sjc"
 
 [env]
   PORT = "8080"
-  # Listen on IPv6. With no public service, the only path to the app is `fly proxy` over Fly's
-  # private network, which is IPv6-only; a process bound to 0.0.0.0 (IPv4) would reset those
-  # connections. "::" accepts IPv4-mapped clients too, so the local IPv4 path keeps working.
+  # Listen on IPv6. With no public service, the app is reached only over `fly proxy` (Fly's private
+  # network, which is IPv6-only) and the in-container Cloudflare Tunnel; a process bound to 0.0.0.0
+  # (IPv4) would reset the `fly proxy` connections. "::" accepts IPv4-mapped clients too, so
+  # cloudflared's local `http://localhost:8080` forward and the IPv4 path keep working.
   HOST = "::"
   # Where Litestream replicates the write-ahead log. Its presence is what switches replication on,
   # so the catalog survives a redeploy. The R2 endpoint and credentials are set as Fly secrets,
