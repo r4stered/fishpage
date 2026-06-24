@@ -22,7 +22,11 @@
 set -e
 
 if [ -n "$CLOUDFLARE_TUNNEL_TOKEN" ]; then
-    cloudflared tunnel --no-autoupdate run --token "$CLOUDFLARE_TUNNEL_TOKEN" &
+    # Grace period kept shorter than the Machine's kill_timeout so cloudflared finishes unregistering
+    # its edge connections on stop. cloudflared's default is 30s; were it still mid-shutdown when Fly
+    # force-kills the Machine, the edge would keep routing to the dead connector and return 502s until
+    # the next restart.
+    TUNNEL_GRACE_PERIOD=5s cloudflared tunnel --no-autoupdate run --token "$CLOUDFLARE_TUNNEL_TOKEN" &
 fi
 
 if [ -n "$LITESTREAM_REPLICA_URL" ]; then
