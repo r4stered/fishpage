@@ -66,9 +66,9 @@ is read from the filename) and the catalog reconciles it within one poll, moving
 
 Every cloud dependency is opt-in and defaults off, so the commands above need no cloud
 credentials. The cloud deploy switches them on through the environment: `LITESTREAM_REPLICA_URL`
-(Litestream replication to Cloudflare R2), `OTEL_EXPORTER_OTLP_ENDPOINT` (telemetry export), and
-`FISHPAGE_CLOUD_INGEST` (drive ingestion from the authenticated upload page instead of the local
-watched folder).
+(Litestream replication to Cloudflare R2), `CLOUDFLARE_TUNNEL_TOKEN` (run the Cloudflare Tunnel
+that fronts the app), `OTEL_EXPORTER_OTLP_ENDPOINT` (telemetry export), and `FISHPAGE_CLOUD_INGEST`
+(drive ingestion from the authenticated upload page instead of the local watched folder).
 
 ## Deploy
 
@@ -83,16 +83,54 @@ docker run --rm -p 8080:8080 fishpage     # then open http://127.0.0.1:8080/
 
 In the cloud the image runs on a single always-on [Fly.io](https://fly.io/) Machine (`fly.toml`).
 No public IP is allocated and no service ports are published, so there is no internet-reachable
-origin — the only way in is `fly proxy` over Fly's private network:
+origin. Administration goes over `fly proxy` on Fly's private network; the public reaches the app
+only through the Cloudflare Tunnel below.
 
 ```sh
 fly deploy                          # build and release the image to the Machine
 fly ips list                        # expect no addresses allocated
-fly proxy 8080:8080 -a fishpage     # then open http://localhost:8080/
+fly proxy 8080:8080 -a fishpage     # private admin path: open http://localhost:8080/
 ```
 
-The edge login that fronts this private origin (a Cloudflare Tunnel + Access) arrives in a later
-slice; until then the origin stays private by construction.
+### Edge access (Cloudflare Tunnel + Access)
+
+The catalog shows the supplier's wholesale prices, so it must be reachable by you from any browser
+but not by the public. The Machine has no public origin; instead `cloudflared` (baked into the
+image) dials out to Cloudflare's edge and forwards requests to the local app, and **Cloudflare
+Access** enforces a login + allowlist on the hostname before any request reaches the tunnel. There
+is deliberately no `fly.dev` URL to bypass it. One-time setup per environment:
+
+1. **Create a tunnel** in the Cloudflare Zero Trust dashboard (Networks → Tunnels → *Create a
+   tunnel* → **Cloudflared**). Name it `fishpage` and copy the tunnel **token** it shows.
+2. **Route a public hostname to the local app.** On the tunnel's *Public Hostname* tab add a
+   hostname on a Cloudflare-managed domain (e.g. `fishpage.example.com`) with service
+   `HTTP` → `[::1]:8080`. The IPv6 loopback is deliberate: the app binds `::` (so `fly proxy`
+   over Fly's IPv6 private network works), and that socket does not accept a literal IPv4
+   `127.0.0.1` connection — `localhost` would resolve to IPv4 and the tunnel would 502. The tunnel
+   is remotely managed, so this routing lives in the dashboard, not in the image.
+3. **Give the Machine the token as a Fly secret** — never commit it. Its presence is what starts
+   the tunnel on boot:
+
+   ```sh
+   fly secrets set CLOUDFLARE_TUNNEL_TOKEN="<tunnel-token>" -a fishpage
+   ```
+
+4. **Protect the hostname with Cloudflare Access** (Zero Trust → Access → Applications →
+   *Add an application* → **Self-hosted**). Set the application domain to the same hostname, then
+   add a policy with action **Allow** whose include rule is an emails allowlist (just your
+   address). Everyone else is denied at the edge.
+
+Confirm the four acceptance criteria once deployed:
+
+```sh
+fly ips list                                   # no v4/v6 addresses — no public Fly origin to bypass
+curl -sI https://fishpage.example.com/         # un-logged-in: 302 to the Cloudflare Access login
+```
+
+Then open `https://fishpage.example.com/` in a browser: an allowlisted login reaches the catalog;
+an un-allowlisted account is denied. The tunnel is opt-in via `CLOUDFLARE_TUNNEL_TOKEN`, which only
+the cloud deploy sets, so `just run`, `docker run`, and the test suite serve the app directly with
+no tunnel.
 
 ### Durability (Litestream → R2)
 

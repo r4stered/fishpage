@@ -25,6 +25,12 @@ ENV FISHPAGE_DB=/app/data/fishpage.db \
 # published image rather than fetching a release tarball at build time.
 COPY --from=litestream/litestream:0.3.13 /usr/local/bin/litestream /usr/local/bin/litestream
 COPY litestream.yml /etc/litestream.yml
+
+# cloudflared runs a Cloudflare Tunnel as the app's only public ingress: it dials out to
+# Cloudflare's edge and forwards authenticated requests to the local app, so the Machine needs no
+# public port. Copy its static binary from the published image, same as Litestream above.
+COPY --from=cloudflare/cloudflared:2026.6.1 /usr/local/bin/cloudflared /usr/local/bin/cloudflared
+
 COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 
 COPY --from=builder /dist/*.whl /tmp/
