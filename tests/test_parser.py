@@ -3,9 +3,16 @@ from decimal import Decimal
 from pathlib import Path
 
 import pytest
+from fpdf import FPDF
 
 from fishpage.models import Item
-from fishpage.parser import DuplicateSkuError, check_unique_skus, parse_stocklist
+from fishpage.parser import (
+    ColumnLayout,
+    DuplicateSkuError,
+    MissingHeaderError,
+    check_unique_skus,
+    parse_stocklist,
+)
 
 FIXTURE = Path(__file__).parent / "fixtures" / "Freshwater_Stocklist_6-19-26.pdf"
 MALFORMED = Path(__file__).parent / "fixtures" / "malformed_rows.pdf"
@@ -13,6 +20,41 @@ MALFORMED = Path(__file__).parent / "fixtures" / "malformed_rows.pdf"
 
 def by_sku(items):
     return {item.sku: item for item in items}
+
+
+def test_column_layout_boundaries_follow_the_header_labels():
+    # The column a word lands in is decided by the header, not fixed coordinates: each
+    # boundary is the left edge of the next column's header. A long name word (here at
+    # x0=300, far right of the narrow "nm" label) still stays in the name column because
+    # the boundary is anchored to where the retail header — not the name header — starts.
+    header = [
+        {"text": "Sku", "x0": 50.0},
+        {"text": "SIZE", "x0": 90.0},
+        {"text": "nm", "x0": 150.0},
+        {"text": "retail_price", "x0": 328.0},
+        {"text": "special_price", "x0": 390.0},
+        {"text": "qty_avail", "x0": 458.0},
+    ]
+    layout = ColumnLayout.from_page_words(header)
+    assert layout is not None
+
+    cols = layout.split_row(
+        [
+            {"text": "110042", "x0": 54.0},
+            {"text": "M", "x0": 92.0},
+            {"text": "Bichir", "x0": 151.0},
+            {"text": "Longfin", "x0": 300.0},  # wide name, well right of the "nm" label
+            {"text": "$", "x0": 329.0},
+            {"text": "28.99", "x0": 354.0},  # right-aligned: starts left of its label
+            {"text": "15", "x0": 495.0},  # right-aligned: starts right of its label
+        ]
+    )
+
+    assert cols.size == ["M"]
+    assert cols.name == ["Bichir", "Longfin"]
+    assert cols.retail == ["$", "28.99"]
+    assert cols.special == []
+    assert cols.qty == ["15"]
 
 
 def test_duplicate_sku_within_one_stocklist_is_rejected():
@@ -125,6 +167,19 @@ def test_wrong_length_sku_is_logged_not_silently_dropped(caplog):
     assert any("12345" in m for m in warnings)
 
 
+def test_name_word_bleeding_into_price_column_is_flagged_not_silently_parsed(caplog):
+    # A stray numeric token drifted into the retail column ahead of the price. Taking the
+    # first number would silently record the wrong price, so a price column that isn't the
+    # "$ <amount>" shape is treated as a misaligned row: skipped and named in the log.
+    with caplog.at_level(logging.WARNING, logger="fishpage.parser"):
+        items = by_sku(parse_stocklist(MALFORMED))
+
+    warnings = [r.getMessage() for r in caplog.records if r.levelno == logging.WARNING]
+
+    assert "100007" not in items  # not parsed into a corrupt $12.50 Item
+    assert any("100007" in m for m in warnings)
+
+
 def test_non_numeric_quantity_is_skipped_not_fatal():
     # A row whose qty cell isn't a number (a stray "CALL", a dash) can't yield a quantity —
     # it is dropped like any other unparseable row rather than crashing the batch.
@@ -153,13 +208,38 @@ def test_skipped_rows_are_logged_with_sku_and_a_summary_count(caplog):
     assert any("100002" in m for m in warnings)  # missing qty column
     assert any("100004" in m for m in warnings)  # non-numeric price
     assert any("100006" in m for m in warnings)  # non-numeric qty
+    assert any("100007" in m for m in warnings)  # price column missing its "$" marker
 
     # A genuine non-data line (a date) is ignored up front, not counted as a skipped row.
     assert not any("6/19/26" in m for m in warnings)
 
-    # The batch surfaces how many rows it dropped: the 3 unparseable data rows above plus the
+    # The batch surfaces how many rows it dropped: the 4 unparseable data rows above plus the
     # wrong-length token, which is treated as a mis-detected data row rather than ignored.
-    assert any("Skipped 4 unparseable" in m for m in warnings)
+    assert any("Skipped 5 unparseable" in m for m in warnings)
+
+
+def test_stocklist_with_no_header_raises(tmp_path):
+    # Column positions come from the header, so a Stocklist that never carries one (a
+    # truncated drop, or an unrecognised layout) cannot be aligned. Rather than guess with
+    # stale coordinates and risk silently mis-columned data, the parse fails loudly.
+    pdf = FPDF(unit="pt", format="letter")
+    pdf.add_page()
+    pdf.set_font("Helvetica", size=9)
+    data_row = [
+        (55.0, "100001"),
+        (100.0, "M"),
+        (155.0, "Tetra"),
+        (335.0, "$"),
+        (360.0, "5.99"),
+        (495.0, "10"),
+    ]
+    for x, text in data_row:
+        pdf.text(x, 92.0, text)
+    headerless = tmp_path / "headerless.pdf"
+    headerless.write_bytes(bytes(pdf.output()))
+
+    with pytest.raises(MissingHeaderError):
+        parse_stocklist(headerless)
 
 
 def test_parses_every_row_with_unique_skus():

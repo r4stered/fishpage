@@ -2,41 +2,57 @@
 row-resilience: good rows, data rows that can't be parsed, and non-data lines.
 
 Run with ``python tests/fixtures/make_malformed_stocklist.py`` to regenerate the committed
-fixture. Text is placed at absolute point coordinates so each word lands in the column band
-the parser reads (SKU left of 85, SIZE 85-145, NAME 145-320, RETAIL 320-385, SPECIAL 385-450,
-QTY from 450). Keeping the x positions here in step with ``fishpage.parser`` is what makes the
-extracted words reconstruct into the columns below.
+fixture. The parser reads column positions from the header row, so this fixture carries the
+real Stocklist's header labels (``Sku``, ``SIZE``, ``nm``, ``retail_price``, ``special_price``,
+``qty_avail``). Each header label's left edge becomes a column boundary; the data words below
+are placed a comfortable margin inside their band so every column resolves unambiguously.
 """
 
 from pathlib import Path
 
 from fpdf import FPDF
 
-# x positions (points) chosen to fall inside the parser's column bands.
-_SKU_X = 40.0
-_SIZE_X = 95.0
-_NAME_X = 150.0
-_NAME_X2 = 200.0
-_NAME_X3 = 250.0
-_RETAIL_DOLLAR_X = 325.0
-_RETAIL_VAL_X = 335.0
-_SPECIAL_DOLLAR_X = 390.0
-_SPECIAL_VAL_X = 400.0
-_QTY_X = 460.0
+# Header label x positions (points). Each one is the left edge of a column, and the parser
+# turns the five right of "Sku" into the column boundaries.
+_H_SKU = 55.0
+_H_SIZE = 90.0
+_H_NM = 150.0
+_H_RETAIL = 325.0
+_H_SPECIAL = 388.0
+_H_QTY = 455.0
+
+# Data x positions, each placed inside the band its header opens (left-aligned columns sit at
+# their header's edge; the right-aligned price/qty columns sit further in, as in the real PDF).
+_SKU_X = 55.0
+_SIZE_X = 100.0
+_NAME_X = 155.0
+_NAME_X2 = 205.0
+_NAME_X3 = 255.0
+_RETAIL_DOLLAR_X = 335.0
+_RETAIL_VAL_X = 360.0
+# A misaligned row where the "$" marker drifted left into the name column, leaving two bare
+# numbers in the retail band — the first would be silently read as the price.
+_DRIFTED_DOLLAR_X = 305.0
+_RETAIL_BLEED_X = 330.0
+_RETAIL_BLEED_VAL_X = 362.0
+_SPECIAL_DOLLAR_X = 398.0
+_SPECIAL_VAL_X = 423.0
+_QTY_X = 495.0
 
 # Each row is (baseline_y, [(x, text), ...]). Rows are spaced far enough in y that the parser
 # groups them into distinct lines.
 _ROWS = [
-    # Header line: first token is not a SKU, so it is a non-data line.
+    # Header line: the real Stocklist's labels at their column edges. The parser locates this
+    # row and reads the column boundaries from it.
     (
         72.0,
         [
-            (_SKU_X, "SKU"),
-            (_SIZE_X, "SIZE"),
-            (_NAME_X, "NAME"),
-            (_RETAIL_DOLLAR_X, "RETAIL"),
-            (_SPECIAL_DOLLAR_X, "SPECIAL"),
-            (_QTY_X, "QTY"),
+            (_H_SKU, "Sku"),
+            (_H_SIZE, "SIZE"),
+            (_H_NM, "nm"),
+            (_H_RETAIL, "retail_price"),
+            (_H_SPECIAL, "special_price"),
+            (_H_QTY, "qty_avail"),
         ],
     ),
     # Good row, retail only.
@@ -139,6 +155,21 @@ _ROWS = [
             (_RETAIL_DOLLAR_X, "$"),
             (_RETAIL_VAL_X, "0.00"),
             (_QTY_X, "0"),
+        ],
+    ),
+    # Misaligned data row: the "$" marker has drifted left out of the retail column, leaving
+    # two bare numbers in it. Reading the first as the price would silently record $12.50, so a
+    # retail column that isn't the "$ <amount>" shape must be flagged rather than parsed.
+    (
+        252.0,
+        [
+            (_SKU_X, "100007"),
+            (_NAME_X, "Loach"),
+            (_NAME_X2, "Kuhli"),
+            (_DRIFTED_DOLLAR_X, "$"),
+            (_RETAIL_BLEED_X, "12.50"),
+            (_RETAIL_BLEED_VAL_X, "5.99"),
+            (_QTY_X, "3"),
         ],
     ),
 ]

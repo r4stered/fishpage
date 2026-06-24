@@ -9,7 +9,10 @@ livestock to order. Not a public storefront.
 ## What it does (v1)
 
 - Parses the SDC Stocklist PDF into structured records (SKU, size, name, retail/special
-  price, quantity) and stores them in SQLite.
+  price, quantity) and stores them in SQLite. Columns are located from the page header
+  rather than fixed coordinates, so a shifted layout still parses and a misaligned price is
+  flagged instead of silently recorded; see
+  [ADR 0006](docs/adr/0006-header-derived-column-boundaries.md).
 - Ingestion is **upsert-by-SKU and never deletes**: an item missing from the latest
   Stocklist goes to quantity 0 (with a `last_seen` date) rather than disappearing, so any
   data attached to it survives temporary stock-outs. A **reuse guard** flags any SKU that
@@ -95,13 +98,13 @@ toggle ([#5](https://github.com/r4stered/fishpage/issues/5)), the Derived Catego
 ([#7](https://github.com/r4stered/fishpage/issues/7)), the Size/on-special filters and
 effective-price sort ([#8](https://github.com/r4stered/fishpage/issues/8)), the
 CI / dev-tooling gate ([#14](https://github.com/r4stered/fishpage/issues/14)),
-watched-folder ingestion ([#9](https://github.com/r4stered/fishpage/issues/9)), and parser
+watched-folder ingestion ([#9](https://github.com/r4stered/fishpage/issues/9)), parser
 row resilience — skip-and-log malformed rows + SKU-shape validation
-([#12](https://github.com/r4stered/fishpage/issues/12)).
+([#12](https://github.com/r4stered/fishpage/issues/12)), and header-derived column detection
+for varied Stocklist layouts ([#13](https://github.com/r4stered/fishpage/issues/13)).
 
 Remaining v1 slices: containerization with a persistent
-volume ([#10](https://github.com/r4stered/fishpage/issues/10)), and robust column detection
-for varied Stocklist layouts ([#13](https://github.com/r4stered/fishpage/issues/13)).
+volume ([#10](https://github.com/r4stered/fishpage/issues/10)).
 
 ## Out of scope (deferred to phase 2)
 
