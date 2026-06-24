@@ -3,7 +3,7 @@
 # secret is needed for that.
 
 resource "github_actions_secret" "fly_api_token" {
-  repository      = var.github_repository
-  secret_name     = "FLY_API_TOKEN"
-  plaintext_value = var.fly_deploy_token
+  repository  = var.github_repository
+  secret_name = "FLY_API_TOKEN"
+  value       = var.fly_deploy_token
 }

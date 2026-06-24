@@ -10,16 +10,16 @@ resource "cloudflare_r2_bucket" "litestream" {
 }
 
 # The permission group granting read+write to R2 storage. Looked up rather than hard-coded because
-# the group's UUID is account-opaque; the lookup fails loudly if the name ever changes upstream.
-data "cloudflare_account_api_token_permission_groups" "r2" {
+# the group's UUID is opaque; the lookup fails loudly if the name ever changes upstream.
+data "cloudflare_account_api_token_permission_groups_list" "r2" {
   account_id = var.cloudflare_account_id
-  scope      = "com.cloudflare.api.account"
+  max_items  = 1000
 }
 
 locals {
   r2_write_permission_group = one([
-    for g in data.cloudflare_account_api_token_permission_groups.r2.permission_groups :
-    g.id if g.name == "Workers R2 Storage Write"
+    for g in data.cloudflare_account_api_token_permission_groups_list.r2.result :
+    g.id if can(regex("R2 Storage Write", g.name))
   ])
 }
 
