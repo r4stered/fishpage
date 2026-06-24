@@ -23,7 +23,7 @@ primary_region = "sjc"
   # Where Litestream replicates the write-ahead log. Its presence is what switches replication on,
   # so the catalog survives a redeploy. The R2 endpoint and credentials are set as Fly secrets,
   # never committed: LITESTREAM_R2_ENDPOINT, LITESTREAM_ACCESS_KEY_ID, LITESTREAM_SECRET_ACCESS_KEY.
-  LITESTREAM_REPLICA_URL = "s3://fishpage-db/catalog"
+  LITESTREAM_REPLICA_URL = "s3://fishpage-litestream/catalog"
 
 # A single Machine that never auto-stops. There is deliberately no [http_service] or
 # [[services]] block: those publish to a public IP, which is exactly what this slice must not do.
