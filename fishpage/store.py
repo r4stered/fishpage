@@ -13,22 +13,10 @@ from decimal import Decimal
 from pathlib import Path
 
 from fishpage import observability
+from fishpage.migrations import migrate
 from fishpage.models import Item
 
 _log = logging.getLogger(__name__)
-
-_SCHEMA = """
-CREATE TABLE IF NOT EXISTS items (
-    sku           TEXT PRIMARY KEY,
-    size          TEXT NOT NULL,
-    name          TEXT NOT NULL,
-    retail_price  TEXT NOT NULL,
-    special_price TEXT,
-    qty_avail     INTEGER NOT NULL,
-    last_seen     TEXT,
-    reuse_flagged INTEGER NOT NULL DEFAULT 0
-)
-"""
 
 
 def open_store(path: str | Path) -> sqlite3.Connection:
@@ -44,24 +32,10 @@ def open_store(path: str | Path) -> sqlite3.Connection:
     # deploy to have anything to stream. WAL is also a fine default for the local file. The pragma
     # is durable — it is recorded in the database header — so it holds across later reopens too.
     conn.execute("PRAGMA journal_mode=WAL")
-    conn.execute(_SCHEMA)
-    _migrate(conn)
-    conn.commit()
+    # The schema is owned by the migration runner: a fresh database is brought up to the latest
+    # version, an already-current one is left untouched. The store no longer defines tables itself.
+    migrate(conn)
     return conn
-
-
-def _migrate(conn: sqlite3.Connection) -> None:
-    """Bring an existing items table up to the current schema.
-
-    The store is persistent and never rebuilt, so a database created by an earlier
-    version predates columns added later. ``CREATE TABLE IF NOT EXISTS`` leaves such a
-    table untouched, so each additive column is backfilled here. ``ADD COLUMN`` with a
-    default backfills existing rows, so a row from before the reuse guard reads as
-    not-flagged.
-    """
-    columns = {row["name"] for row in conn.execute("PRAGMA table_info(items)")}
-    if "reuse_flagged" not in columns:
-        conn.execute("ALTER TABLE items ADD COLUMN reuse_flagged INTEGER NOT NULL DEFAULT 0")
 
 
 def reconcile(conn: sqlite3.Connection, items: list[Item], stocklist_date: date) -> None:

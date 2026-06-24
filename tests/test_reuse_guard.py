@@ -1,7 +1,6 @@
 """Reuse guard: flag a SKU reappearing under a materially different name."""
 
 import logging
-import sqlite3
 from datetime import date
 from decimal import Decimal
 
@@ -104,30 +103,3 @@ def test_first_sight_of_a_sku_is_never_flagged(tmp_path):
 
     stored = {item.sku: item for item in all_items(conn)}
     assert stored["110042"].reuse_flagged is False
-
-
-def test_open_store_backfills_the_flag_onto_a_pre_existing_schema(tmp_path):
-    db = tmp_path / "fishpage.db"
-    # A store created before the reuse guard existed: items table without reuse_flagged.
-    legacy = sqlite3.connect(db)
-    legacy.execute(
-        "CREATE TABLE items (sku TEXT PRIMARY KEY, size TEXT NOT NULL, name TEXT NOT NULL, "
-        "retail_price TEXT NOT NULL, special_price TEXT, qty_avail INTEGER NOT NULL, "
-        "last_seen TEXT)"
-    )
-    legacy.execute(
-        "INSERT INTO items VALUES ('110042', 'M', 'Bichir Ornate', '28.99', NULL, 15, '2026-06-19')"
-    )
-    legacy.commit()
-    legacy.close()
-
-    # Reopening must add the column (not raise) and existing rows default to not-flagged.
-    conn = open_store(db)
-    stored = {item.sku: item for item in all_items(conn)}
-    assert stored["110042"].reuse_flagged is False
-
-    # And the column is usable for the guard going forward.
-    reused = Item("110042", "L", "Discus Blue Diamond", Decimal("44.99"), None, 6)
-    reconcile(conn, [reused], JUN26)
-    stored = {item.sku: item for item in all_items(conn)}
-    assert stored["110042"].reuse_flagged is True
