@@ -6,6 +6,8 @@ so local data persists across a restart.
 """
 
 import sqlite3
+import subprocess
+from collections.abc import Callable
 from datetime import date
 from pathlib import Path
 
@@ -14,18 +16,46 @@ from fishpage.ingest import stocklist_date
 from fishpage.parser import parse_stocklist
 from fishpage.store import latest_stocklist_date, reconcile
 
+# The Litestream config baked into the deploy image. It resolves the replica's bucket, R2 endpoint,
+# and credentials from the environment, keeping those (and the secret keys) out of the argv.
+LITESTREAM_CONFIG = Path("/etc/litestream.yml")
 
-def restore_database(settings: Settings) -> bool:
+
+def litestream_restore_command(settings: Settings) -> list[str]:
+    """Build the ``litestream restore`` invocation that pulls the database back before serving.
+
+    ``-if-replica-exists`` makes the first-ever boot a no-op rather than a failure: the replica is
+    still empty, so there is nothing to restore and the boot falls through to seeding from the
+    sample PDF. On every later boot it restores the latest snapshot in place at the configured path.
+    """
+    return [
+        "litestream",
+        "restore",
+        "-if-replica-exists",
+        "-config",
+        str(LITESTREAM_CONFIG),
+        str(settings.db_path),
+    ]
+
+
+def restore_database(
+    settings: Settings,
+    run: Callable[..., object] = subprocess.run,
+) -> bool:
     """Restore the SQLite file from object storage before serving, when replication is on.
 
     Returns ``True`` when a restore was performed. With no replica configured — bare ``just run``
     and CI — this is a no-op returning ``False`` and the app runs on the plain local file. When a
-    replica *is* configured it refuses to continue rather than serve an unreplicated database: the
-    restore mechanism is filled in by the Litestream slice this seam exists for.
+    replica *is* configured it shells out to ``litestream restore`` and fails loudly if that
+    command fails, rather than serve a database that could not be recovered.
+
+    Runs ahead of ``litestream replicate`` (the image entrypoint sequences it first), so the two
+    Litestream operations never contend for the same file.
     """
     if settings.litestream_replica_url is None:
         return False
-    raise NotImplementedError("Litestream restore is configured but not yet implemented")
+    run(litestream_restore_command(settings), check=True)
+    return True
 
 
 def init_observability(settings: Settings) -> bool:

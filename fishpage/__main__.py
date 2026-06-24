@@ -15,14 +15,13 @@ import threading
 import uvicorn
 
 from fishpage.app import create_app
-from fishpage.boot import init_observability, restore_database, seed_if_empty
+from fishpage.boot import init_observability, seed_if_empty
 from fishpage.config import Settings, load_settings
 from fishpage.ingest import watch_incoming
 from fishpage.store import open_store
 
 
 def build_app(settings: Settings):
-    restore_database(settings)
     conn = open_store(settings.db_path)
     loaded = seed_if_empty(conn, settings.pdf_path)
     if loaded:

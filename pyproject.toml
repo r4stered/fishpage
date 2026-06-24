@@ -13,6 +13,7 @@ dependencies = [
 
 [project.scripts]
 fishpage = "fishpage.__main__:main"
+fishpage-restore = "fishpage.restore:main"
 
 [dependency-groups]
 dev = [

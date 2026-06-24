@@ -3,7 +3,13 @@ from decimal import Decimal
 
 import pytest
 
-from fishpage.boot import init_observability, restore_database, seed_if_empty
+from fishpage.boot import (
+    LITESTREAM_CONFIG,
+    init_observability,
+    litestream_restore_command,
+    restore_database,
+    seed_if_empty,
+)
 from fishpage.config import DEFAULT_PDF, load_settings
 from fishpage.models import Item
 from fishpage.store import all_items, latest_stocklist_date, open_store, reconcile
@@ -46,17 +52,38 @@ def test_a_populated_catalog_survives_a_restart_and_is_not_reseeded(tmp_path):
     assert [item.sku for item in stored] == ["110042"]
 
 
+def test_the_restore_command_pulls_the_configured_database_back_from_its_replica():
+    settings = load_settings({"FISHPAGE_DB": "/data/fishpage.db"})
+
+    command = litestream_restore_command(settings)
+
+    # `-if-replica-exists` makes the very first boot a no-op (the R2 replica is still empty) so
+    # the boot can fall through to seeding from the sample PDF instead of failing. The replica
+    # itself — bucket, endpoint, credentials — is resolved from the Litestream config file.
+    assert command == [
+        "litestream",
+        "restore",
+        "-if-replica-exists",
+        "-config",
+        str(LITESTREAM_CONFIG),
+        "/data/fishpage.db",
+    ]
+
+
 def test_restore_is_a_noop_when_no_replica_is_configured(tmp_path):
     settings = load_settings({})
+    runs = []
 
-    assert restore_database(settings) is False
+    assert restore_database(settings, run=lambda cmd, **kw: runs.append(cmd)) is False
+    assert runs == []  # the litestream binary is never invoked off the cloud path
 
 
-def test_restore_refuses_to_run_silently_when_a_replica_is_configured():
+def test_restore_runs_litestream_when_a_replica_is_configured():
     settings = load_settings({"LITESTREAM_REPLICA_URL": "s3://fishpage/db"})
+    runs = []
 
-    with pytest.raises(NotImplementedError):
-        restore_database(settings)
+    assert restore_database(settings, run=lambda cmd, **kw: runs.append(cmd)) is True
+    assert runs == [litestream_restore_command(settings)]
 
 
 def test_observability_is_a_noop_when_no_exporter_endpoint_is_configured():

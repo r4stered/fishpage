@@ -1,0 +1,20 @@
+# Litestream streams the SQLite write-ahead log to a Cloudflare R2 bucket so the catalog survives
+# a redeploy or Machine restart. Every value comes from the environment, so no bucket name, R2
+# endpoint, or credential is baked into the image:
+#
+#   FISHPAGE_DB                  database path (set in the image; also what the app opens)
+#   LITESTREAM_REPLICA_URL       s3://<bucket>/<prefix> the WAL replicates to
+#   LITESTREAM_R2_ENDPOINT       https://<account>.r2.cloudflarestorage.com
+#   LITESTREAM_ACCESS_KEY_ID     R2 token id        (Fly secret, read natively by Litestream)
+#   LITESTREAM_SECRET_ACCESS_KEY R2 token secret    (Fly secret, read natively by Litestream)
+#
+# Baked into the image at /etc/litestream.yml — Litestream's default config path — so both the
+# boot-time restore and `litestream replicate` find it without a -config flag.
+
+dbs:
+  - path: ${FISHPAGE_DB}
+    replicas:
+      - url: ${LITESTREAM_REPLICA_URL}
+        endpoint: ${LITESTREAM_R2_ENDPOINT}
+        region: auto
+        force-path-style: true

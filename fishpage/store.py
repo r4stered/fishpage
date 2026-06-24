@@ -39,6 +39,10 @@ def open_store(path: str | Path) -> sqlite3.Connection:
     # closing it would mean a write lock around reconcile or a per-reader WAL snapshot.
     conn = sqlite3.connect(path, check_same_thread=False)
     conn.row_factory = sqlite3.Row
+    # Litestream replicates the write-ahead log, so the store must be in WAL mode for the cloud
+    # deploy to have anything to stream. WAL is also a fine default for the local file. The pragma
+    # is durable — it is recorded in the database header — so it holds across later reopens too.
+    conn.execute("PRAGMA journal_mode=WAL")
     conn.execute(_SCHEMA)
     _migrate(conn)
     conn.commit()

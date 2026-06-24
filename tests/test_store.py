@@ -13,6 +13,13 @@ LEAF = Item("110092", "-", "Leaf Fish Leopard Ctenopoma", Decimal("5.99"), Decim
 SOLD_OUT = Item("110200", "L", "Datnoid Indo", Decimal("89.99"), None, 0)
 
 
+def test_the_store_opens_in_wal_mode_so_litestream_can_replicate(tmp_path):
+    # Litestream streams the write-ahead log; a database in the default rollback-journal mode
+    # produces nothing for it to replicate. WAL is set on open so every store is replicable.
+    conn = open_store(tmp_path / "fishpage.db")
+    assert conn.execute("PRAGMA journal_mode").fetchone()[0] == "wal"
+
+
 def test_latest_stocklist_date_is_none_when_empty(tmp_path):
     conn = open_store(tmp_path / "fishpage.db")
     assert latest_stocklist_date(conn) is None
