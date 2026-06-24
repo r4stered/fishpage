@@ -3,17 +3,24 @@
 import sqlite3
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from fishpage import observability
 from fishpage.browse import SIZE_GRADES, browse
+from fishpage.ingest import ingest_pending, stocklist_date
 from fishpage.models import Item
-from fishpage.render import render_catalog
-from fishpage.store import all_items
+from fishpage.render import render_catalog, render_upload
+from fishpage.store import all_items, latest_stocklist_date
 
 _STATIC = Path(__file__).parent / "static"
+
+
+def _upload_error(message: str) -> HTMLResponse:
+    """Re-render the upload page with a rejection message and a 400, so a bad upload reads as a
+    failure to both a browser and a caller checking the status code."""
+    return HTMLResponse(render_upload(message=message, error=True), status_code=400)
 
 
 def _item_dict(item: Item) -> dict:
@@ -28,10 +35,55 @@ def _item_dict(item: Item) -> dict:
     }
 
 
-def create_app(conn: sqlite3.Connection) -> FastAPI:
+def create_app(
+    conn: sqlite3.Connection,
+    *,
+    incoming_dir: Path | None = None,
+    processed_dir: Path | None = None,
+) -> FastAPI:
     app = FastAPI(title="Fishpage")
     observability.instrument_fastapi(app)
     app.mount("/static", StaticFiles(directory=_STATIC), name="static")
+
+    @app.get("/upload", response_class=HTMLResponse)
+    def upload_page() -> HTMLResponse:
+        return HTMLResponse(render_upload())
+
+    @app.post("/upload", response_class=HTMLResponse)
+    async def upload(file: UploadFile) -> HTMLResponse:
+        assert incoming_dir is not None and processed_dir is not None
+        name = Path(file.filename or "").name
+        try:
+            # Validate the date before writing anything: the upload has no retry loop, so an
+            # undated drop must be rejected at the door rather than silently parked in incoming/.
+            stocklist_date(Path(name))
+        except ValueError:
+            return _upload_error(
+                f"{name or 'That file'} carries no valid M-D-YY date in its name. "
+                "Rename it to the Stocklist's date (e.g. Freshwater_Stocklist_6-26-26.pdf) "
+                "and upload again."
+            )
+
+        incoming_dir.mkdir(parents=True, exist_ok=True)
+        drop = incoming_dir / name
+        drop.write_bytes(await file.read())
+
+        ingested = ingest_pending(conn, incoming_dir, processed_dir)
+        if any(path.name == name for path in ingested):
+            total = len(all_items(conn, include_out_of_stock=True))
+            return HTMLResponse(
+                render_upload(message=f"Ingested {name}. The catalog now holds {total} Items.")
+            )
+
+        # The core kept the drop: it is older than the catalog (monotonicity) or parsed to no
+        # rows. Clear the litter — nothing will retry it — and say why.
+        drop.unlink(missing_ok=True)
+        latest = latest_stocklist_date(conn)
+        if latest is not None and stocklist_date(Path(name)) <= latest:
+            reason = f"its date is not newer than the catalog's current {latest}."
+        else:
+            reason = "no Items could be parsed from it (is the PDF complete?)."
+        return _upload_error(f"{name} was not ingested: {reason}")
 
     @app.get("/healthz")
     def healthz() -> JSONResponse:

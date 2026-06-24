@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Upload a Stocklist &middot; Fishpage</title>
+  </head>
+  <body>
+    <main>
+      <h1>Upload a Stocklist</h1>
+      <p>
+        Pick the supplier's Stocklist PDF. Keep its original
+        <code>M-D-YY</code> filename &mdash; that date drives the catalog update,
+        so an undated file is rejected rather than guessed.
+      </p>
+
+      {% if message %}
+      <p class="{{ 'error' if error else 'ok' }}" role="status">{{ message }}</p>
+      {% endif %}
+
+      <form method="post" action="/upload" enctype="multipart/form-data">
+        <input type="file" name="file" accept="application/pdf,.pdf" required />
+        <button type="submit">Upload</button>
+      </form>
+
+      <p><a href="/">Back to the catalog</a></p>
+    </main>
+  </body>
+</html>

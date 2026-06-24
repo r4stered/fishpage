@@ -112,6 +112,14 @@ def test_catalog_reflects_reconciled_state_after_reingest(tmp_path):
     assert items["110092"]["qty_avail"] == 0  # absentee zeroed, still served
 
 
+def test_index_links_to_the_upload_page(tmp_path):
+    html = client(tmp_path).get("/").text
+
+    # The upload page is otherwise reachable only by URL; the catalog links to it so a new
+    # Stocklist can be ingested in the cloud, where there is no watched folder to drop into.
+    assert 'href="/upload"' in html
+
+
 def test_index_defaults_to_in_stock_cards(tmp_path):
     html = client(tmp_path).get("/").text
 
