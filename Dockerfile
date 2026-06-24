@@ -9,14 +9,6 @@ RUN uv build --wheel -o /dist
 
 FROM python:3.14-slim AS runtime
 
-# tini runs as PID 1 to reap zombies and forward the stop signal to the whole process group. The
-# Cloudflare Tunnel runs as a backgrounded sibling of the app; without this it would be killed
-# mid-flight on a deploy and never deregister, stranding a dead connector at Cloudflare's edge that
-# the edge keeps routing to (502s). With tini it receives the signal and shuts down cleanly.
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends tini \
-    && rm -rf /var/lib/apt/lists/*
-
 # The database and watched-folder directories live under a writable working tree rather than
 # site-packages. The ephemeral disk starts blank on every boot; durability comes from restoring
 # the database from R2 before serving (see the entrypoint), not from the disk surviving. The
@@ -45,4 +37,4 @@ COPY --from=builder /dist/*.whl /tmp/
 RUN pip install --no-cache-dir /tmp/*.whl && rm /tmp/*.whl
 
 EXPOSE 8080
-ENTRYPOINT ["tini", "-g", "--", "docker-entrypoint.sh"]
+ENTRYPOINT ["docker-entrypoint.sh"]
