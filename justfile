@@ -5,6 +5,11 @@
 # The Fly app these ops recipes administer.
 app := "fishpage"
 
+# Auto-load a gitignored `.env` (copy from `.env.example`) so the bootstrap credentials are exported
+# into every recipe — no manual `export` and no remembering which token is which. Optional: recipes
+# that need no secrets ignore it, and it is silently skipped when absent.
+set dotenv-load := true
+
 # List available recipes.
 default:
     @just --list
@@ -187,5 +192,6 @@ _bootstrap-preflight:
     [[ -f infra/backend.hcl ]] || missing+=("infra/backend.hcl (copy from .example)")
     if (( ${#missing[@]} )); then
         printf 'bootstrap prerequisite missing:\n'; printf '  - %s\n' "${missing[@]}"
-        echo 'See infra/README.md.'; exit 1
+        echo 'Secrets go in .env (copy from .env.example); non-secret values in infra/terraform.tfvars. See infra/README.md.'
+        exit 1
     fi

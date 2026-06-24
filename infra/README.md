@@ -51,20 +51,12 @@ plus the vendors' own installers on Linux; `wrangler` is an npm global, so Node.
 1. **Non-secret values** → `terraform.tfvars` (copy from `terraform.tfvars.example`): account/zone
    IDs, the hostname, the Access allowlist, the Grafana stack slug + URL.
 2. **Backend** → `backend.hcl` (copy from `backend.hcl.example`).
-3. **Secrets via the environment** — never written to a file:
+3. **Secrets** → `.env` at the repo root (copy from `.env.example`). `just` auto-loads it, so you
+   never `export` anything by hand; each slot is labelled with what the token is and where to mint
+   it. `.env` is gitignored and never committed. It holds the Cloudflare / GitHub / Grafana provider
+   tokens, the R2 state-bucket S3 keys, the Fly deploy token, and the state-encryption passphrase.
 
-   ```sh
-   export CLOUDFLARE_API_TOKEN=...               # R2 + Tunnel + DNS + Access scopes
-   export GITHUB_TOKEN=...                        # repo scope, to set the Actions secret
-   export GRAFANA_CLOUD_ACCESS_POLICY_TOKEN=...   # mints the OTLP token
-   export GRAFANA_AUTH=...                        # stack token, to provision the alert
-   export AWS_ACCESS_KEY_ID=...                   # R2 state-bucket S3 keys
-   export AWS_SECRET_ACCESS_KEY=...
-   export TF_VAR_fly_deploy_token="$(fly tokens create deploy -a fishpage)"
-   export TF_VAR_state_encryption_passphrase=...  # >= 16 chars; guard it — it unlocks state
-   ```
-
-   Plus an authenticated `flyctl` (`FLY_API_TOKEN` or `fly auth login`).
+   `flyctl` auth comes from `FLY_API_TOKEN` in that same `.env`, or run `fly auth login` instead.
 
 ## Run it
 
