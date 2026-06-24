@@ -12,7 +12,7 @@
 # a later slice; the origin stays private by construction until then.
 
 app = "fishpage"
-primary_region = "sea"
+primary_region = "sjc"
 
 [build]
   dockerfile = "Dockerfile"
