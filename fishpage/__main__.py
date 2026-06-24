@@ -45,7 +45,11 @@ def build_app(settings: Settings):
             f"(every {settings.poll_interval:g}s)"
         )
 
-    return create_app(conn)
+    return create_app(
+        conn,
+        incoming_dir=settings.incoming_dir,
+        processed_dir=settings.processed_dir,
+    )
 
 
 def listening_socket(host: str, port: int) -> socket.socket:

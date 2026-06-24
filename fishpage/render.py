@@ -35,3 +35,12 @@ def render_catalog(
         search=search,
         sort=sort,
     )
+
+
+def render_upload(*, message: str = "", error: bool = False) -> str:
+    """Render the Stocklist upload page, optionally carrying a post-submit status line.
+
+    ``message`` is shown above the form after a POST — a success summary, or a rejection reason
+    flagged by ``error`` so an undated or stale upload reads as a failure, not a quiet no-op.
+    """
+    return _env.get_template("upload.html").render(message=message, error=error)

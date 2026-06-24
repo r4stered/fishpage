@@ -17,33 +17,64 @@ env:
   UV_LOCKED: "1"
 
 jobs:
+  # Docs-only changes don't need linting, typechecking, testing, or a deploy. But lint/types/test are
+  # required status checks on main, and a job that never runs leaves its check pending forever, blocking
+  # the merge. So those jobs always run and report success — they just skip their expensive steps when no
+  # code changed, gated on this filter. `code` is every path except Markdown and docs/.
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      code: ${{ steps.filter.outputs.code }}
+    steps:
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            code:
+              - '**'
+              - '!**/*.md'
+              - '!docs/**'
+
   lint:
+    needs: changes
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        if: needs.changes.outputs.code == 'true'
       - uses: astral-sh/setup-uv@v7
+        if: needs.changes.outputs.code == 'true'
         with:
           enable-cache: true
       - run: uv run just lint
+        if: needs.changes.outputs.code == 'true'
 
   types:
+    needs: changes
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        if: needs.changes.outputs.code == 'true'
       - uses: astral-sh/setup-uv@v7
+        if: needs.changes.outputs.code == 'true'
         with:
           enable-cache: true
       - run: uv run just typecheck
+        if: needs.changes.outputs.code == 'true'
 
   test:
+    needs: changes
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        if: needs.changes.outputs.code == 'true'
       - uses: astral-sh/setup-uv@v7
+        if: needs.changes.outputs.code == 'true'
         with:
           enable-cache: true
       - run: uv run just test
+        if: needs.changes.outputs.code == 'true'
       - name: Upload coverage reports to Codecov
+        if: needs.changes.outputs.code == 'true'
         uses: codecov/codecov-action@v7
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
@@ -56,8 +87,8 @@ jobs:
   # SHA-tagged image to the Machine with no rebuild. The SHA tag is the rollback lever: redeploying a
   # prior SHA is a pull-and-restart, no build.
   deploy:
-    needs: [lint, types, test]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [changes, lint, types, test]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -94,8 +125,8 @@ jobs:
   # which is the image above. The release is tagged with the package version plus the deployed git
   # SHA so the artifact ties back to the exact commit.
   release:
-    needs: [lint, types, test]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [changes, lint, types, test]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: write

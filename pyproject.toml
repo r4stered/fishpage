@@ -5,6 +5,7 @@ description = "Internal browse tool over the SDC freshwater Stocklist PDF"
 requires-python = ">=3.14"
 dependencies = [
     "fastapi>=0.110",
+    "python-multipart>=0.0.9",
     "uvicorn>=0.29",
     "pdfplumber>=0.11",
     "jinja2>=3.1",
