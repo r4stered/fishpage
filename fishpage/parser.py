@@ -9,6 +9,7 @@ x-coordinates, anchored to the header row's column positions.
 import logging
 from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
+from itertools import pairwise
 from pathlib import Path
 
 import pdfplumber
@@ -58,15 +59,24 @@ class ColumnLayout:
 
     @classmethod
     def from_page_words(cls, words) -> ColumnLayout | None:
-        """Build a layout from a page's words, or ``None`` if it has no header row."""
+        """Build a layout from a page's words, or ``None`` if it has no header row.
+
+        Raises :class:`MissingHeaderError` if every label is present but they do not read
+        strictly left to right. The bands assume increasing edges; out-of-order edges
+        would make a band's low exceed its high and silently empty that column, so a
+        scrambled header is rejected as unusable rather than used.
+        """
         left_edges: dict[str, float] = {}
         for w in words:
             if w["text"] in _HEADER_LABELS and w["text"] not in left_edges:
                 left_edges[w["text"]] = w["x0"]
         if len(left_edges) < len(_HEADER_LABELS):
             return None
+        ordered = [left_edges[label] for label in _HEADER_LABELS]
+        if any(left >= right for left, right in pairwise(ordered)):
+            raise MissingHeaderError(f"header labels are not left-to-right: {ordered}")
         # Boundaries are the left edges of every column after the SKU.
-        return cls(*(left_edges[label] for label in _HEADER_LABELS[1:]))
+        return cls(*ordered[1:])
 
     def split_row(self, words) -> RowColumns:
         def band(low: float, high: float) -> list[str]:
@@ -88,11 +98,13 @@ _SKU_DIGITS = 6
 
 
 class MissingHeaderError(ValueError):
-    """No page of the Stocklist carried the header row that anchors the columns.
+    """No page of the Stocklist yielded a usable header row to anchor the columns.
 
-    Column positions are read from the header rather than hardcoded, so without it there
-    is nothing to align rows against. Rather than guess and risk silently mis-columned
-    data, the parse fails — a truncated or unrecognised drop is surfaced, not ingested.
+    Either no page carried the header labels, or a page carried all of them but out of
+    column order. Column positions are read from the header rather than hardcoded, so
+    without a usable one there is nothing to align rows against. Rather than guess and risk
+    silently mis-columned data, the parse fails — a truncated or unrecognised drop is
+    surfaced, not ingested.
     """
 
 

@@ -33,6 +33,11 @@ The header row prints only on the **first page**; the remaining pages are data o
 therefore derived once, from whichever page carries the header, and reused for every page — the
 columns are identical across pages, so there is nothing per-page to recompute.
 
+The derived edges are required to read **strictly left to right**. The bands assume increasing
+edges, so a header detected out of column order — a pdfplumber tokenisation quirk, say — would make
+a band's lower bound exceed its upper bound and silently empty that column. A non-monotonic header
+is rejected (`MissingHeaderError`) rather than used, turning an assumed invariant into a checked one.
+
 ## A misaligned price is flagged, not silently parsed
 
 Dynamic boundaries shrink the chance of misassignment but cannot rule it out, so each row is
@@ -42,6 +47,15 @@ with no marker, a stray token alongside the price — means a word from an adjac
 Rather than read the first number it finds and record a wrong price, the parser treats the row as
 misaligned and skips it, logged by SKU through the same skip-and-summarize path the other
 unparseable rows use. Silent misassignment becomes a visible signal.
+
+The same shape check applies to `special_price`, the right-most and only optional price column, and
+that is a deliberate tradeoff. A blank special column is normal and reads correctly as "no special
+price". But a *garbled* special — present yet not `$ <amount>` — now drops the **whole row**,
+including an otherwise-good retail price and quantity. Keeping the Item with `special = None` would
+salvage more, but a malformed special is itself evidence the row's columns have shifted, and we would
+rather lose one row visibly than record an Item whose other fields may be quietly wrong too. The
+stricter rule wins for the same reason the rest of the check does: a misaligned row is surfaced, not
+half-trusted.
 
 ## A Stocklist with no header fails loudly
 

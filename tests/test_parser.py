@@ -57,6 +57,23 @@ def test_column_layout_boundaries_follow_the_header_labels():
     assert cols.qty == ["15"]
 
 
+def test_header_labels_out_of_column_order_are_rejected():
+    # All six labels are present, but "nm" and "retail_price" sit at swapped x positions, so
+    # the edges no longer read left to right. Building bands from them would make a band's low
+    # exceed its high and silently empty a column, so the degenerate header is rejected loudly.
+    header = [
+        {"text": "Sku", "x0": 50.0},
+        {"text": "SIZE", "x0": 90.0},
+        {"text": "nm", "x0": 330.0},  # where retail should be
+        {"text": "retail_price", "x0": 150.0},  # where nm should be
+        {"text": "special_price", "x0": 390.0},
+        {"text": "qty_avail", "x0": 458.0},
+    ]
+
+    with pytest.raises(MissingHeaderError):
+        ColumnLayout.from_page_words(header)
+
+
 def test_duplicate_sku_within_one_stocklist_is_rejected():
     # Two distinct rows claiming the same SKU — ON CONFLICT would silently keep only
     # the last, since SKU is the permanent key. The parse must fail loudly instead.
