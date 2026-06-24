@@ -7,9 +7,6 @@
 #     fly deploy                          # build and release the image to the Machine
 #     fly ips list                        # expect no v4/v6 addresses allocated
 #     fly proxy 8080:8080 -a fishpage     # then browse http://localhost:8080/
-#
-# Public edge access (a Cloudflare Tunnel + Access login in front of this private origin) arrives in
-# a later slice; the origin stays private by construction until then.
 
 app = "fishpage"
 primary_region = "sjc"
