@@ -198,6 +198,31 @@ fly proxy 8080:8080 -a fishpage     # the ingested data is still there
 Replication is opt-in via `LITESTREAM_REPLICA_URL`, which only the cloud deploy sets, so
 `just run`, `docker run`, and the test suite operate on a plain local SQLite file with no R2.
 
+### Schema migrations
+
+Because the database now persists across deploys, a schema change meets a live, populated catalog.
+[`fishpage/migrations.py`](fishpage/migrations.py) is a small raw-SQL runner — deliberately not an
+ORM-backed framework — that keeps that catalog in step. It tracks the applied version in SQLite's
+own `PRAGMA user_version` and, on every `open_store`, applies each migration whose version is newer
+than the database's, in order, then stamps the version forward. Re-running is a no-op once the
+database is current, so boot is idempotent; each migration commits with its version bump in one
+transaction, so a crash leaves the database at the last fully-applied version, never half-migrated.
+
+To add a migration, append a tuple to `MIGRATIONS`:
+
+```python
+MIGRATIONS: list[tuple[int, str]] = [
+    (1, """CREATE TABLE IF NOT EXISTS items ( ... );"""),
+    (2, """ALTER TABLE items ADD COLUMN notes TEXT;"""),  # the new one
+]
+```
+
+- Use the **next integer** version; migrations apply in ascending order.
+- Write plain SQL, each statement terminated with `;`. The runner wraps it in the transaction and
+  adds the `user_version` bump — don't write `BEGIN`, `COMMIT`, or `PRAGMA user_version` yourself.
+- **Never edit or reorder a released migration.** A database that already applied the old text
+  would silently diverge from one migrating fresh; correct it with a new, higher-versioned migration.
+
 ### Observability (OpenTelemetry → Grafana Cloud)
 
 The app is instrumented with OpenTelemetry — structured logs, traces, and metrics — exported over

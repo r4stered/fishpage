@@ -2,6 +2,7 @@ from dataclasses import replace
 from datetime import date
 from decimal import Decimal
 
+from fishpage.migrations import MIGRATIONS, schema_version
 from fishpage.models import Item
 from fishpage.store import all_items, latest_stocklist_date, open_store, reconcile
 
@@ -18,6 +19,13 @@ def test_the_store_opens_in_wal_mode_so_litestream_can_replicate(tmp_path):
     # produces nothing for it to replicate. WAL is set on open so every store is replicable.
     conn = open_store(tmp_path / "fishpage.db")
     assert conn.execute("PRAGMA journal_mode").fetchone()[0] == "wal"
+
+
+def test_open_store_runs_migrations_and_stamps_the_schema_version(tmp_path):
+    # Opening the store applies the migration runner, so a fresh database lands at the latest
+    # version rather than at the un-stamped 0 an ad-hoc CREATE TABLE would leave.
+    conn = open_store(tmp_path / "fishpage.db")
+    assert schema_version(conn) == MIGRATIONS[-1][0]
 
 
 def test_latest_stocklist_date_is_none_when_empty(tmp_path):
