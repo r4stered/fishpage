@@ -29,14 +29,18 @@ livestock to order. Not a public storefront.
 - Rebuilds the catalog from a configured Stocklist PDF on start, then **watches an incoming
   folder**: a Stocklist PDF dropped into it is parsed and reconciled into the live catalog and
   moved aside. A polling trigger over a trigger-agnostic core keeps the drop reliable on a
-  mounted volume and swappable for event- or HTTP-driven ingestion later (see
-  [ADR 0005](docs/adr/0005-watched-folder-polling-trigger.md)).
+  mounted volume; the cloud deployment drives the same core from an authenticated upload page
+  instead (see [ADR 0005](docs/adr/0005-watched-folder-polling-trigger.md)).
 
 ## Stack
 
 Python (managed with [uv](https://docs.astral.sh/uv/)) · FastAPI · pdfplumber · SQLite.
-Deploys as a single Docker container on Unraid, with the SQLite database and the watched
-incoming folder on mounted volumes.
+Deploys as a single Docker image to [Fly.io](https://fly.io/), auto-deployed from `main`. SQLite is
+kept durable by [Litestream](https://litestream.io/) streaming the database to Cloudflare R2 and
+restoring it on boot (see [ADR 0008](docs/adr/0008-sqlite-litestream-object-storage.md)); a Cloudflare
+Tunnel + Access login fronts the app so the wholesale prices are not public (see
+[ADR 0007](docs/adr/0007-deploy-to-flyio-cloud-not-unraid.md)). In the cloud a new Stocklist is
+ingested through an authenticated upload page rather than the local watched folder.
 
 ## Run it
 
@@ -103,8 +107,11 @@ row resilience — skip-and-log malformed rows + SKU-shape validation
 ([#12](https://github.com/r4stered/fishpage/issues/12)), and header-derived column detection
 for varied Stocklist layouts ([#13](https://github.com/r4stered/fishpage/issues/13)).
 
-Remaining v1 slices: containerization with a persistent
-volume ([#10](https://github.com/r4stered/fishpage/issues/10)).
+Remaining v1 slices: cloud deployment to Fly.io — a Litestream-backed image, an authenticated
+upload page, a gated push-to-`main` pipeline, and OpenTelemetry wiring
+([#10](https://github.com/r4stered/fishpage/issues/10), to be rewritten from its original
+Unraid framing; see [ADR 0007](docs/adr/0007-deploy-to-flyio-cloud-not-unraid.md) and
+[ADR 0008](docs/adr/0008-sqlite-litestream-object-storage.md)).
 
 ## Out of scope (deferred to phase 2)
 
