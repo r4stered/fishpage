@@ -1,5 +1,6 @@
 from pathlib import Path
 
+import fishpage
 from fishpage.config import (
     DEFAULT_DB,
     DEFAULT_INCOMING,
@@ -7,6 +8,16 @@ from fishpage.config import (
     DEFAULT_PROCESSED,
     load_settings,
 )
+
+
+def test_the_seed_stocklist_ships_inside_the_installed_package():
+    # The deploy image installs only the wheel, with no source tree, and seeds the catalog from
+    # DEFAULT_PDF on boot. So the sample Stocklist must live under the package directory (like the
+    # templates and static assets) rather than alongside the tests, or it is absent in the wheel.
+    package_dir = Path(fishpage.__file__).resolve().parent
+
+    assert DEFAULT_PDF.is_file()
+    assert DEFAULT_PDF.resolve().is_relative_to(package_dir)
 
 
 def test_cloud_dependencies_default_off_with_an_empty_environment():

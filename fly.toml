@@ -1,0 +1,27 @@
+# Fishpage runs as a single always-on Fly Machine.
+#
+# No public IP is allocated and no service ports are published, so there is no internet-reachable
+# origin and the supplier's wholesale prices stay private. The only way in is `fly proxy` over Fly's
+# private WireGuard network:
+#
+#     fly deploy                          # build and release the image to the Machine
+#     fly ips list                        # expect no v4/v6 addresses allocated
+#     fly proxy 8080:8080 -a fishpage     # then browse http://localhost:8080/
+#
+# Public edge access (a Cloudflare Tunnel + Access login in front of this private origin) arrives in
+# a later slice; the origin stays private by construction until then.
+
+app = "fishpage"
+primary_region = "sea"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  PORT = "8080"
+
+# A single Machine that never auto-stops. There is deliberately no [http_service] or
+# [[services]] block: those publish to a public IP, which is exactly what this slice must not do.
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"
