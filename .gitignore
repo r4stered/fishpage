@@ -12,6 +12,7 @@ venv/
 .coverage
 coverage.xml
 htmlcov/
+.wrangler/
 
 # Build artifacts
 dist/

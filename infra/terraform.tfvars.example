@@ -1,0 +1,24 @@
+# Copy to terraform.tfvars (gitignored) and fill in the ~6 non-secret blanks. Secrets do NOT go here:
+# they are exported into the environment by `just bootstrap` (see infra/README.md):
+#   CLOUDFLARE_API_TOKEN, GITHUB_TOKEN, GRAFANA_CLOUD_ACCESS_POLICY_TOKEN, GRAFANA_AUTH,
+#   TF_VAR_fly_deploy_token, TF_VAR_state_encryption_passphrase.
+
+# --- Cloudflare ---
+cloudflare_account_id = "0123456789abcdef0123456789abcdef"
+cloudflare_zone_id    = "abcdef0123456789abcdef0123456789"
+hostname              = "fishpage.example.com"
+
+# --- Access allowlist (comma-separated) ---
+access_allowed_emails = "you@example.com"
+
+# --- Grafana Cloud ---
+grafana_cloud_stack_slug = "yourstack"
+grafana_url              = "https://yourstack.grafana.net"
+
+# --- Optional overrides (defaults shown; match fly.toml) ---
+# fly_app             = "fishpage"
+# fly_primary_region  = "sjc"
+# r2_bucket_name      = "fishpage-litestream"
+# github_owner        = "r4stered"
+# github_repository   = "fishpage"
+# access_session_duration = "24h"
