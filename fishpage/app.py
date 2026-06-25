@@ -8,6 +8,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Resp
 from fastapi.staticfiles import StaticFiles
 
 from fishpage import observability
+from fishpage.access import ACCESS_EMAIL_HEADER, uploader_from_header
 from fishpage.browse import SIZE_GRADES, browse
 from fishpage.catalog import build_cards, filter_cards_by_classifiers
 from fishpage.images import ImageDecodeError, ImageStore, store_image
@@ -100,11 +101,20 @@ def create_app(
         return _upload_error(f"{name} was not ingested: {reason}")
 
     @app.post("/items/{sku}/image")
-    async def upload_image(sku: str, file: UploadFile) -> Response:
+    async def upload_image(
+        sku: str,
+        file: UploadFile,
+        access_email: str | None = Header(default=None, alias=ACCESS_EMAIL_HEADER),
+    ) -> Response:
         # Manual image upload: hand the raw bytes to the shared store_image seam, which optimizes to
         # WebP, puts them in the bucket, and records only the object key plus manual Provenance. The
         # bytes never touch SQLite — only the key does — so the WAL Litestream streams stays small.
         # A manual image is un-clobberable by re-enrichment.
+        #
+        # Access authenticates the human at the edge and injects their email; we credit it as the
+        # Uploader, trusting it without verifying the JWT because no route reaches the origin
+        # without passing through Access. Off the edge the header is absent and a neutral
+        # placeholder stands in.
         if image_store is None:
             return JSONResponse({"detail": "image storage is not configured"}, status_code=503)
         if not item_exists(conn, sku):
@@ -116,6 +126,7 @@ def create_app(
                 sku,
                 await file.read(),
                 provenance=Provenance.MANUAL,
+                uploaded_by=uploader_from_header(access_email),
                 max_dimension=image_max_dimension,
             )
         except ImageDecodeError:

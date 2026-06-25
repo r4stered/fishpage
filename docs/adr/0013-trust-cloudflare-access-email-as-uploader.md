@@ -22,9 +22,11 @@ a crypto dependency. We take the header at face value and spend the complexity e
 
 ## What gets recorded, and the fallback
 
-The Uploader is stored on the image row alongside its Provenance, durable in the same
-Litestream-replicated catalog, and emitted as an attribute on the upload's structured log event. It
-is meaningful only for `manual` images; the auto-source path has no human Uploader and leaves it
+The Uploader — and the moment it landed — is stored on the image row alongside its Provenance,
+durable in the same Litestream-replicated catalog, and emitted with the SKU and Provenance as
+attributes on the upload's structured log event. So the catalog answers *who* attached an image, and
+*when*, straight from the DB forever, while the log answers the same within retention. Both are
+meaningful only for `manual` images; the auto-source path has no human Uploader and leaves them
 unset, the way it already leaves `license`/`attribution` unset on a manual upload.
 
 Off the Access edge — local `just run`, the test suite — the header is absent. The route records a

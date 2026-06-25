@@ -84,6 +84,17 @@ MIGRATIONS: list[tuple[int, str]] = [
         ALTER TABLE enrichment DROP COLUMN image_source_url;
         """,
     ),
+    (
+        4,
+        # Who attached a manual image, and when. The Uploader is the Cloudflare Access identity
+        # credited with a manual upload; the timestamp is when it landed. Both are nullable and
+        # meaningful only for manual images — the auto-source path has no human Uploader and leaves
+        # them unset, the way it already leaves license/attribution unset on a manual upload.
+        """
+        ALTER TABLE image ADD COLUMN uploaded_by TEXT;
+        ALTER TABLE image ADD COLUMN uploaded_at TEXT;
+        """,
+    ),
 ]
 
 

@@ -31,7 +31,7 @@ def test_a_fresh_database_is_brought_up_to_the_baseline_schema(tmp_path):
 
     # The baseline migration creates the v1 items table; later migrations then carry the fresh
     # database forward to the latest version.
-    assert version == 3
+    assert version == 4
     columns = {row[1] for row in conn.execute("PRAGMA table_info(items)")}
     assert "sku" in columns and "reuse_flagged" in columns
 
@@ -41,7 +41,7 @@ def test_re_running_on_an_up_to_date_database_is_a_noop(tmp_path):
     migrate(conn)
 
     # A second boot must not re-apply or error; the version stays put.
-    assert migrate(conn) == 3
+    assert migrate(conn) == 4
 
 
 def test_a_populated_pre_runner_database_keeps_its_rows_and_is_stamped(tmp_path):
@@ -57,7 +57,7 @@ def test_a_populated_pre_runner_database_keeps_its_rows_and_is_stamped(tmp_path)
 
     # The baseline meets an existing table as a no-op: the row survives while the database is
     # carried forward to the latest version so later migrations build on it.
-    assert version == 3
+    assert version == 4
     rows = conn.execute("SELECT sku, name FROM items").fetchall()
     assert rows == [("110042", "Bichir Ornate")]
 
@@ -118,7 +118,7 @@ def test_the_enrichment_schema_migration_creates_both_enrichment_tables(tmp_path
 
     # The phase-2 Enrichment schema lands as the migration after the v1 baseline; the runner then
     # carries the database on to the latest version.
-    assert version == 3
+    assert version == 4
     assert {"enrichment", "classifier_override"} <= table_names(conn)
 
 
@@ -194,6 +194,35 @@ def test_migration_3_moves_image_metadata_into_its_own_table(tmp_path):
     )
 
 
+def test_migration_4_adds_nullable_uploader_audit_columns_to_image(tmp_path):
+    conn = fresh_conn()
+
+    migrate(conn)
+
+    # The Uploader and an upload timestamp join the image row: who attached a manual image and
+    # when, durable in the same catalog. Both are nullable — the auto-source path has no human
+    # Uploader and leaves them unset, the way it already leaves license/attribution unset.
+    assert {"uploaded_by", "uploaded_at"} <= image_columns(conn)
+    conn.execute(
+        "INSERT INTO image (sku, object_key, provenance, uploaded_by, uploaded_at) "
+        "VALUES ('110042', 'k', 'manual', 'a@example.com', '2026-06-25T12:00:00+00:00')"
+    )
+    # A sourced row leaves both NULL, proving the columns are nullable, not defaulted.
+    conn.execute(
+        "INSERT INTO image (sku, object_key, provenance) VALUES ('110092', 'k2', 'wikimedia')"
+    )
+    rows = {
+        sku: (uploaded_by, uploaded_at)
+        for sku, uploaded_by, uploaded_at in conn.execute(
+            "SELECT sku, uploaded_by, uploaded_at FROM image"
+        )
+    }
+    assert rows == {
+        "110042": ("a@example.com", "2026-06-25T12:00:00+00:00"),
+        "110092": (None, None),
+    }
+
+
 def test_classifier_override_stores_one_correction_per_sku_and_key(tmp_path):
     conn = fresh_conn()
     migrate(conn)
@@ -230,7 +259,7 @@ def test_the_enrichment_migration_is_additive_on_a_populated_database(tmp_path):
 
     # The first real migrations against the live, populated database: existing Items are untouched
     # and the new tables land empty alongside them — no data loss.
-    assert version == 3
+    assert version == 4
     assert conn.execute("SELECT sku, name FROM items").fetchall() == [("110042", "Bichir Ornate")]
     assert conn.execute("SELECT count(*) FROM enrichment").fetchone()[0] == 0
     assert conn.execute("SELECT count(*) FROM classifier_override").fetchone()[0] == 0

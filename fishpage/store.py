@@ -8,7 +8,7 @@ current Stocklist, and never deletes a row.
 import logging
 import re
 import sqlite3
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 from pathlib import Path
 
@@ -230,6 +230,8 @@ def attach_image(
     attribution: str | None = None,
     source_url: str | None = None,
     provenance: Provenance = Provenance.MANUAL,
+    uploaded_by: str | None = None,
+    uploaded_at: datetime | None = None,
 ) -> None:
     """Record one Item's image metadata, defaulting to ``manual`` Provenance.
 
@@ -237,14 +239,21 @@ def attach_image(
     SKU so a fresh upload supersedes the prior key rather than accumulating rows. This table is
     separate from ``enrichment`` on purpose: a ``manual`` image is structurally un-clobberable
     because re-enrichment never deletes a manual row, the same instinct as ``classifier_override``.
+
+    ``uploaded_by``/``uploaded_at`` are the Uploader — who attached a manual image and when. They
+    are persisted verbatim and left ``None`` for the auto-source path, which has no human Uploader.
     """
     conn.execute(
-        "INSERT INTO image (sku, object_key, license, attribution, source_url, provenance) "
-        "VALUES (:sku, :object_key, :license, :attribution, :source_url, :provenance) "
+        "INSERT INTO image "
+        "(sku, object_key, license, attribution, source_url, provenance, uploaded_by, uploaded_at) "
+        "VALUES "
+        "(:sku, :object_key, :license, :attribution, :source_url, :provenance, :uploaded_by, "
+        ":uploaded_at) "
         "ON CONFLICT(sku) DO UPDATE SET "
         "object_key = excluded.object_key, license = excluded.license, "
         "attribution = excluded.attribution, source_url = excluded.source_url, "
-        "provenance = excluded.provenance",
+        "provenance = excluded.provenance, uploaded_by = excluded.uploaded_by, "
+        "uploaded_at = excluded.uploaded_at",
         {
             "sku": sku,
             "object_key": object_key,
@@ -252,21 +261,30 @@ def attach_image(
             "attribution": attribution,
             "source_url": source_url,
             "provenance": provenance.value,
+            "uploaded_by": uploaded_by,
+            "uploaded_at": None if uploaded_at is None else uploaded_at.isoformat(),
         },
     )
     conn.commit()
 
 
-_IMAGE_COLUMNS = "object_key, license, attribution, source_url, provenance"
+_IMAGE_COLUMNS = (
+    "object_key, license, attribution, source_url, provenance, uploaded_by, uploaded_at"
+)
 
 
 def _row_to_image(row: sqlite3.Row) -> ImageRecord:
+    uploaded_at: datetime | None = (
+        None if row["uploaded_at"] is None else datetime.fromisoformat(row["uploaded_at"])
+    )
     return ImageRecord(
         object_key=row["object_key"],
         license=row["license"],
         attribution=row["attribution"],
         source_url=row["source_url"],
         provenance=Provenance(row["provenance"]),
+        uploaded_by=row["uploaded_by"],
+        uploaded_at=uploaded_at,
     )
 
 

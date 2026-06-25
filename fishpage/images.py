@@ -8,8 +8,11 @@ in-memory fake with no bucket and no credentials, the way the enricher is faked.
 """
 
 import io
+import logging
 import sqlite3
+from collections.abc import Callable
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from typing import Any, Protocol, runtime_checkable
 
 from PIL import Image, UnidentifiedImageError
@@ -17,6 +20,12 @@ from PIL import Image, UnidentifiedImageError
 from fishpage.config import Settings
 from fishpage.models import Provenance
 from fishpage.store import attach_image
+
+_log = logging.getLogger(__name__)
+
+
+def _utcnow() -> datetime:
+    return datetime.now(UTC)
 
 
 @dataclass(frozen=True)
@@ -71,20 +80,26 @@ def store_image(
     license: str | None = None,
     attribution: str | None = None,
     source_url: str | None = None,
+    uploaded_by: str | None = None,
+    now: Callable[[], datetime] = _utcnow,
     max_dimension: int,
 ) -> None:
     """Optimize raw bytes to WebP, put them in the bucket, and record the metadata — the one write
     path every stored image takes.
 
-    Both sources call this: the manual upload route with ``provenance=MANUAL``, and the future
-    auto-source drainer with ``provenance=WIKIMEDIA`` plus the source's license/attribution. Routing
-    every write through here is what keeps the two paths from diverging on optimization. The SKU is
-    the object key, so one Item has one image and a re-store overwrites in place. Optimization runs
-    first and raises :class:`ImageDecodeError` on a bad input *before* any write, so a corrupt image
-    leaves nothing behind in the bucket or the DB.
+    Both sources call this: the manual upload route with ``provenance=MANUAL`` and an
+    ``uploaded_by`` Uploader, and the future auto-source drainer with ``provenance=WIKIMEDIA`` plus
+    the source's license/attribution. Routing every write through here is what keeps the two paths
+    from diverging on optimization. The SKU is the object key, so one Item has one image and a
+    re-store overwrites in place. Optimization runs first and raises :class:`ImageDecodeError` on a
+    bad input *before* any write, so a corrupt image leaves nothing behind in the bucket or the DB.
+
+    ``uploaded_by`` is the Uploader to credit; when present the moment it landed is stamped as
+    ``uploaded_at``. The auto-source path passes no Uploader and so leaves both unset.
     """
     optimized = optimize_image(raw_bytes, max_dimension=max_dimension)
     image_store.put(sku, optimized.data, content_type=optimized.content_type)
+    uploaded_at = None if uploaded_by is None else now()
     attach_image(
         conn,
         sku,
@@ -93,6 +108,17 @@ def store_image(
         attribution=attribution,
         source_url=source_url,
         provenance=provenance,
+        uploaded_by=uploaded_by,
+        uploaded_at=uploaded_at,
+    )
+    # One structured event per stored image, emitted at the shared seam so both sources narrate
+    # alike. The Uploader, SKU, and Provenance ride as indexed fields, not text baked into the
+    # message, so the recent-uploads view filters on who attached what within log retention.
+    _log.info(
+        "Stored %s image for %s",
+        provenance.value,
+        sku,
+        extra={"uploader": uploaded_by, "sku": sku, "provenance": provenance.value},
     )
 
 
