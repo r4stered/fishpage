@@ -30,6 +30,12 @@ primary_region = "sjc"
   # so the catalog survives a redeploy. The R2 endpoint and credentials are set as Fly secrets,
   # never committed: LITESTREAM_R2_ENDPOINT, LITESTREAM_ACCESS_KEY_ID, LITESTREAM_SECRET_ACCESS_KEY.
   LITESTREAM_REPLICA_URL = "s3://fishpage-litestream/catalog"
+  # Enrichment images: bytes live in a separate R2 bucket, proxied through the app so they stay
+  # behind Access. The bucket name and the opt-in flag are non-secret config; the R2 endpoint and
+  # credentials are Fly secrets, never committed: R2_IMAGES_ENDPOINT, R2_IMAGES_ACCESS_KEY_ID,
+  # R2_IMAGES_SECRET_ACCESS_KEY. With the flag off (or no credentials) image upload/serve is dormant.
+  FISHPAGE_IMAGES_ENABLED = "true"
+  R2_IMAGES_BUCKET = "fishpage-images"
   # OTLP wire protocol for telemetry export. Non-secret config, so it lives here rather than in Fly
   # secrets. What actually switches export on is OTEL_EXPORTER_OTLP_ENDPOINT, set as a Fly secret
   # alongside the auth header OTEL_EXPORTER_OTLP_HEADERS (Authorization=Basic <base64>); with no

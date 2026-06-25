@@ -39,6 +39,31 @@ resource "cloudflare_account_token" "r2" {
   }]
 }
 
+# --- R2: a second bucket for enrichment image bytes ---
+
+# Image bytes live in their own bucket, separate from the Litestream replica, so they never enter the
+# database the restore reasons about. The app reads and writes it over R2's S3-compatible API and
+# proxies the bytes through itself — the bucket is never public — so images stay behind Access.
+resource "cloudflare_r2_bucket" "images" {
+  account_id = var.cloudflare_account_id
+  name       = var.r2_images_bucket_name
+}
+
+# A second account-owned token scoped to R2 storage write, distinct from the Litestream token so the
+# image and replica credentials can be rotated independently. Its id/secret derive the S3 keys in
+# outputs.tf and are pushed to Fly as the R2_IMAGES_* secrets.
+resource "cloudflare_account_token" "r2_images" {
+  account_id = var.cloudflare_account_id
+  name       = "${var.fly_app}-r2-images"
+  policies = [{
+    effect            = "allow"
+    permission_groups = [{ id = local.r2_write_permission_group }]
+    resources = jsonencode({
+      "com.cloudflare.api.account.${var.cloudflare_account_id}" = "*"
+    })
+  }]
+}
+
 # --- Tunnel: the Machine's only ingress ---
 
 # A remotely-configured tunnel (config_src = cloudflare) so its ingress is declared below rather than

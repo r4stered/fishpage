@@ -4,11 +4,13 @@ from decimal import Decimal
 
 from fishpage.enricher import Difficulty, EnrichmentResult, PlantSafe, Temperament
 from fishpage.migrations import MIGRATIONS, schema_version
-from fishpage.models import Item
+from fishpage.models import ImageRecord, Item, Provenance
 from fishpage.store import (
     all_items,
+    attach_image,
     clear_enrichment,
     enrichment_for,
+    image_for,
     latest_stocklist_date,
     open_store,
     persist_enrichment,
@@ -125,6 +127,69 @@ def test_clearing_enrichment_requeues_the_sku(tmp_path):
     # pass; its enrichment reads back as gone.
     assert "110042" in {item.sku for item in unenriched_items(conn)}
     assert enrichment_for(conn, "110042") is None
+
+
+def test_attaching_a_manual_image_records_manual_provenance(tmp_path):
+    conn = open_store(tmp_path / "fishpage.db")
+    reconcile(conn, [ORNATE_M], JUN19)
+
+    attach_image(
+        conn,
+        "110042",
+        object_key="img/110042.jpg",
+        license="CC-BY-4.0",
+        attribution="A. Photographer",
+        source_url="https://example.org/ornate",
+    )
+
+    # The object key plus license/attribution/source read back intact, and the Provenance defaults
+    # to manual — a human attached it. An Item with no image reads back as None.
+    assert image_for(conn, "110042") == ImageRecord(
+        object_key="img/110042.jpg",
+        license="CC-BY-4.0",
+        attribution="A. Photographer",
+        source_url="https://example.org/ornate",
+        provenance=Provenance.MANUAL,
+    )
+    assert image_for(conn, "110092") is None
+
+
+def test_re_attaching_an_image_replaces_the_prior_one_for_that_sku(tmp_path):
+    conn = open_store(tmp_path / "fishpage.db")
+    reconcile(conn, [ORNATE_M], JUN19)
+    attach_image(conn, "110042", object_key="img/old.jpg")
+
+    attach_image(conn, "110042", object_key="img/new.jpg")
+
+    # One image per Item: a fresh upload supersedes the prior key rather than accumulating rows.
+    record = image_for(conn, "110042")
+    assert record is not None and record.object_key == "img/new.jpg"
+
+
+def test_re_enrich_leaves_a_manual_image_untouched(tmp_path):
+    conn = open_store(tmp_path / "fishpage.db")
+    reconcile(conn, [ORNATE_M], JUN19)
+    persist_enrichment(conn, "110042", ORNATE_ENRICHMENT)
+    attach_image(conn, "110042", object_key="img/110042.jpg")  # manual by default
+
+    clear_enrichment(conn, "110042")
+
+    # An on-demand re-enrich clears the AI row but a human's manual image survives — it lives in a
+    # separate table the re-enrich never touches, the same un-clobberable guarantee as an override.
+    assert enrichment_for(conn, "110042") is None
+    record = image_for(conn, "110042")
+    assert record is not None and record.object_key == "img/110042.jpg"
+
+
+def test_re_enrich_clears_a_sourced_image_so_it_is_re_fetched(tmp_path):
+    conn = open_store(tmp_path / "fishpage.db")
+    reconcile(conn, [ORNATE_M], JUN19)
+    attach_image(conn, "110042", object_key="img/sourced.jpg", provenance=Provenance.WIKIMEDIA)
+
+    clear_enrichment(conn, "110042")
+
+    # A best-effort sourced image is re-enrichable, so re-enrich drops it; only manual is sticky.
+    assert image_for(conn, "110042") is None
 
 
 def test_persisting_enrichment_leaves_a_manual_override_intact(tmp_path):

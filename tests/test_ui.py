@@ -57,6 +57,41 @@ def test_grid_partial_renders_cards_without_page_chrome():
     assert "<form" not in html
 
 
+def test_a_card_with_a_stored_image_points_at_the_proxy_route():
+    html = render_grid([ORNATE_M], image_skus={"110042"})
+
+    # The card's image is served from the app's own proxy route — never a public bucket URL — so it
+    # stays behind the Access edge. The placeholder is replaced for an Item that has an image.
+    assert 'src="/items/110042/image"' in html
+    assert "placeholder.svg" not in html
+
+
+def test_a_card_without_an_image_falls_back_to_the_placeholder():
+    html = render_grid([ORNATE_M])
+
+    # An un-enriched, image-less Item still renders — the placeholder stands in until one is added.
+    assert "placeholder.svg" in html
+    assert "/items/110042/image" not in html
+
+
+def test_cards_offer_a_manual_upload_form_when_images_are_enabled():
+    html = render_grid([ORNATE_M], images_enabled=True)
+
+    # The manual upload path: a multipart form per card posting an image file to the SKU's route,
+    # working without JavaScript (plain action/method, not HTMX-only).
+    assert 'action="/items/110042/image"' in html
+    assert 'method="post"' in html
+    assert 'enctype="multipart/form-data"' in html
+    assert 'type="file"' in html
+
+
+def test_cards_hide_the_upload_form_when_images_are_disabled():
+    html = render_grid([ORNATE_M])
+
+    # With no image bucket configured the form would only 503, so it is not offered at all.
+    assert 'action="/items/110042/image"' not in html
+
+
 def test_stylesheet_is_served_from_the_static_mount(tmp_path):
     resp = _client(tmp_path).get("/static/app.css")
 

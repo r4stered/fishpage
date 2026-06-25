@@ -42,6 +42,12 @@ variable "r2_bucket_name" {
   default     = "fishpage-litestream"
 }
 
+variable "r2_images_bucket_name" {
+  type        = string
+  description = "Separate R2 bucket for enrichment image bytes, kept out of the Litestream restore bucket. Must match R2_IMAGES_BUCKET (fly.toml)."
+  default     = "fishpage-images"
+}
+
 # --- Access allowlist ---
 
 variable "access_allowed_emails" {

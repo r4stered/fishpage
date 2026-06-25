@@ -31,7 +31,7 @@ def test_a_fresh_database_is_brought_up_to_the_baseline_schema(tmp_path):
 
     # The baseline migration creates the v1 items table; later migrations then carry the fresh
     # database forward to the latest version.
-    assert version == 2
+    assert version == 3
     columns = {row[1] for row in conn.execute("PRAGMA table_info(items)")}
     assert "sku" in columns and "reuse_flagged" in columns
 
@@ -41,7 +41,7 @@ def test_re_running_on_an_up_to_date_database_is_a_noop(tmp_path):
     migrate(conn)
 
     # A second boot must not re-apply or error; the version stays put.
-    assert migrate(conn) == 2
+    assert migrate(conn) == 3
 
 
 def test_a_populated_pre_runner_database_keeps_its_rows_and_is_stamped(tmp_path):
@@ -57,7 +57,7 @@ def test_a_populated_pre_runner_database_keeps_its_rows_and_is_stamped(tmp_path)
 
     # The baseline meets an existing table as a no-op: the row survives while the database is
     # carried forward to the latest version so later migrations build on it.
-    assert version == 2
+    assert version == 3
     rows = conn.execute("SELECT sku, name FROM items").fetchall()
     assert rows == [("110042", "Bichir Ornate")]
 
@@ -116,8 +116,9 @@ def test_the_enrichment_schema_migration_creates_both_enrichment_tables(tmp_path
 
     version = migrate(conn)
 
-    # The phase-2 Enrichment schema lands as the next migration after the v1 baseline.
-    assert version == 2
+    # The phase-2 Enrichment schema lands as the migration after the v1 baseline; the runner then
+    # carries the database on to the latest version.
+    assert version == 3
     assert {"enrichment", "classifier_override"} <= table_names(conn)
 
 
@@ -165,18 +166,32 @@ def test_enum_care_columns_accept_a_valid_value_the_unknown_hatch_and_null(tmp_p
     assert row == ("beginner", "unknown", None)
 
 
-def test_enrichment_holds_image_metadata_but_never_the_bytes(tmp_path):
+def image_columns(conn):
+    return {row[1] for row in conn.execute("PRAGMA table_info(image)")}
+
+
+def test_migration_3_moves_image_metadata_into_its_own_table(tmp_path):
     conn = fresh_conn()
 
     migrate(conn)
 
-    # Only the R2 object key plus license/attribution/source — the bytes live in the bucket.
+    # The manual image follows the override pattern, not the wholesale-overwritten enrichment row,
+    # so its metadata lives in a dedicated image table — keyed by SKU, carrying only the R2 object
+    # key plus license/attribution/source and its Provenance, never the bytes.
+    assert "image" in table_names(conn)
     assert {
-        "image_object_key",
-        "image_license",
-        "image_attribution",
-        "image_source_url",
-    } <= enrichment_columns(conn)
+        "sku",
+        "object_key",
+        "license",
+        "attribution",
+        "source_url",
+        "provenance",
+    } <= image_columns(conn)
+    # And the vestigial image columns the phase-2 schema put in enrichment are gone.
+    assert not (
+        {"image_object_key", "image_license", "image_attribution", "image_source_url"}
+        & enrichment_columns(conn)
+    )
 
 
 def test_classifier_override_stores_one_correction_per_sku_and_key(tmp_path):
@@ -213,9 +228,10 @@ def test_the_enrichment_migration_is_additive_on_a_populated_database(tmp_path):
 
     version = migrate(conn)
 
-    # The first real migration against the live, populated database: existing Items are untouched
-    # and the new tables land empty alongside them — additive only, no data loss.
-    assert version == 2
+    # The first real migrations against the live, populated database: existing Items are untouched
+    # and the new tables land empty alongside them — no data loss.
+    assert version == 3
     assert conn.execute("SELECT sku, name FROM items").fetchall() == [("110042", "Bichir Ornate")]
     assert conn.execute("SELECT count(*) FROM enrichment").fetchone()[0] == 0
     assert conn.execute("SELECT count(*) FROM classifier_override").fetchone()[0] == 0
+    assert conn.execute("SELECT count(*) FROM image").fetchone()[0] == 0

@@ -15,7 +15,7 @@ from pathlib import Path
 from fishpage import observability
 from fishpage.enricher import Difficulty, EnrichmentResult, PlantSafe, Temperament
 from fishpage.migrations import migrate
-from fishpage.models import Item
+from fishpage.models import ImageRecord, Item, Provenance
 
 _log = logging.getLogger(__name__)
 
@@ -210,6 +210,64 @@ def enrichment_for(conn: sqlite3.Connection, sku: str) -> EnrichmentResult | Non
     )
 
 
+def attach_image(
+    conn: sqlite3.Connection,
+    sku: str,
+    *,
+    object_key: str,
+    license: str | None = None,
+    attribution: str | None = None,
+    source_url: str | None = None,
+    provenance: Provenance = Provenance.MANUAL,
+) -> None:
+    """Record one Item's image metadata, defaulting to ``manual`` Provenance.
+
+    Only the R2 object key plus license/attribution/source is stored — never the bytes. Upsert by
+    SKU so a fresh upload supersedes the prior key rather than accumulating rows. This table is
+    separate from ``enrichment`` on purpose: a ``manual`` image is structurally un-clobberable
+    because re-enrichment never deletes a manual row, the same instinct as ``classifier_override``.
+    """
+    conn.execute(
+        "INSERT INTO image (sku, object_key, license, attribution, source_url, provenance) "
+        "VALUES (:sku, :object_key, :license, :attribution, :source_url, :provenance) "
+        "ON CONFLICT(sku) DO UPDATE SET "
+        "object_key = excluded.object_key, license = excluded.license, "
+        "attribution = excluded.attribution, source_url = excluded.source_url, "
+        "provenance = excluded.provenance",
+        {
+            "sku": sku,
+            "object_key": object_key,
+            "license": license,
+            "attribution": attribution,
+            "source_url": source_url,
+            "provenance": provenance.value,
+        },
+    )
+    conn.commit()
+
+
+def image_for(conn: sqlite3.Connection, sku: str) -> ImageRecord | None:
+    """The persisted image metadata for one SKU, or ``None`` when it has no image."""
+    row = conn.execute(
+        "SELECT object_key, license, attribution, source_url, provenance FROM image WHERE sku = ?",
+        (sku,),
+    ).fetchone()
+    if row is None:
+        return None
+    return ImageRecord(
+        object_key=row["object_key"],
+        license=row["license"],
+        attribution=row["attribution"],
+        source_url=row["source_url"],
+        provenance=Provenance(row["provenance"]),
+    )
+
+
+def skus_with_images(conn: sqlite3.Connection) -> set[str]:
+    """The SKUs with a stored image — the catalog uses these to pick proxy over placeholder."""
+    return {row["sku"] for row in conn.execute("SELECT sku FROM image")}
+
+
 def item_exists(conn: sqlite3.Connection, sku: str) -> bool:
     """Whether ``sku`` names a stored Item — the guard the on-demand re-enrich route checks."""
     return conn.execute("SELECT 1 FROM items WHERE sku = ?", (sku,)).fetchone() is not None
@@ -219,9 +277,14 @@ def clear_enrichment(conn: sqlite3.Connection, sku: str) -> None:
     """Drop a SKU's enrichment row, returning it to the un-enriched queue for a re-enrich.
 
     Only the AI ``enrichment`` row goes; any ``manual`` ``classifier_override`` for the SKU stays,
-    so an on-demand re-enrich re-runs the AI pass without discarding a human correction.
+    so an on-demand re-enrich re-runs the AI pass without discarding a human correction. A sourced
+    image is best-effort and so is dropped to be re-fetched, but a ``manual`` image is authoritative
+    and left intact — it lives in the ``image`` table, which this clears only for non-manual rows.
     """
     conn.execute("DELETE FROM enrichment WHERE sku = ?", (sku,))
+    conn.execute(
+        "DELETE FROM image WHERE sku = ? AND provenance != ?", (sku, Provenance.MANUAL.value)
+    )
     conn.commit()
 
 

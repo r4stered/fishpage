@@ -4,19 +4,23 @@ import sqlite3
 from pathlib import Path
 
 from fastapi import FastAPI, Header, UploadFile
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from fishpage import observability
 from fishpage.browse import SIZE_GRADES, browse
+from fishpage.images import ImageStore
 from fishpage.ingest import ingest_pending, stocklist_date
 from fishpage.models import Item
 from fishpage.render import render_catalog, render_grid, render_upload
 from fishpage.store import (
     all_items,
+    attach_image,
     clear_enrichment,
+    image_for,
     item_exists,
     latest_stocklist_date,
+    skus_with_images,
 )
 
 _STATIC = Path(__file__).parent / "static"
@@ -45,6 +49,7 @@ def create_app(
     *,
     incoming_dir: Path | None = None,
     processed_dir: Path | None = None,
+    image_store: ImageStore | None = None,
 ) -> FastAPI:
     app = FastAPI(title="Fishpage")
     observability.instrument_fastapi(app)
@@ -89,6 +94,37 @@ def create_app(
         else:
             reason = "no Items could be parsed from it (is the PDF complete?)."
         return _upload_error(f"{name} was not ingested: {reason}")
+
+    @app.post("/items/{sku}/image")
+    async def upload_image(sku: str, file: UploadFile) -> Response:
+        # Manual image upload: store the bytes in the images bucket and record only the object key
+        # plus manual Provenance in the DB. The bytes never touch SQLite — only the key does — so
+        # the WAL Litestream streams stays small. A manual image is un-clobberable by re-enrichment.
+        if image_store is None:
+            return JSONResponse({"detail": "image storage is not configured"}, status_code=503)
+        if not item_exists(conn, sku):
+            return JSONResponse({"detail": f"unknown SKU {sku}"}, status_code=404)
+        # One image per Item: the SKU is the object key, so a re-upload overwrites in place rather
+        # than orphaning bytes in the bucket.
+        key = sku
+        content_type = file.content_type or "application/octet-stream"
+        image_store.put(key, await file.read(), content_type=content_type)
+        attach_image(conn, sku, object_key=key)
+        # Post/redirect/get back to the catalog so a browser form lands on the refreshed grid (the
+        # card now shows the proxied image) without re-posting on reload, and works with no JS.
+        return RedirectResponse(url="/", status_code=303)
+
+    @app.get("/items/{sku}/image")
+    def serve_image(sku: str) -> Response:
+        # Proxy the bytes through the app rather than redirecting to a public bucket URL, so the
+        # image stays behind the Access edge exactly like the wholesale prices.
+        if image_store is None:
+            return Response(status_code=404)
+        record = image_for(conn, sku)
+        stored = None if record is None else image_store.get(record.object_key)
+        if stored is None:
+            return Response(status_code=404)
+        return Response(content=stored.data, media_type=stored.content_type)
 
     @app.get("/healthz")
     def healthz() -> JSONResponse:
@@ -152,8 +188,10 @@ def create_app(
         # One route, header-sniffed: an HTMX filter change swaps just the grid fragment in place,
         # while a hard navigation to the same URL renders the whole page. The pushed URL and the
         # reloadable URL are identical because both go through here.
+        image_skus = skus_with_images(conn)
+        images_enabled = image_store is not None
         if hx_request:
-            return HTMLResponse(render_grid(items))
+            return HTMLResponse(render_grid(items, image_skus, images_enabled=images_enabled))
         return HTMLResponse(
             render_catalog(
                 items,
@@ -165,6 +203,8 @@ def create_app(
                 on_special=on_special,
                 search=search,
                 sort=sort,
+                image_skus=image_skus,
+                images_enabled=images_enabled,
             )
         )
 

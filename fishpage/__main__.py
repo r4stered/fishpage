@@ -23,6 +23,7 @@ from fishpage.boot import seed_if_empty
 from fishpage.config import Settings, load_settings
 from fishpage.drainer import run_drainer
 from fishpage.enricher import Enricher, select_enricher
+from fishpage.images import select_image_store
 from fishpage.ingest import watch_incoming
 from fishpage.store import open_store
 
@@ -52,10 +53,15 @@ def build_app(settings: Settings):
     if start_drainer(conn, settings) is not None:
         print("Enrichment drainer running — filling un-enriched Items in the background")
 
+    image_store = select_image_store(settings)
+    if image_store is not None:
+        print("Image bucket configured — manual uploads stored in R2 and proxied through the app")
+
     return create_app(
         conn,
         incoming_dir=settings.incoming_dir,
         processed_dir=settings.processed_dir,
+        image_store=image_store,
     )
 
 

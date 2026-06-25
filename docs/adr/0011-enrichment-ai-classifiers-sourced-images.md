@@ -40,7 +40,8 @@ and re-enrichment must never overwrite it, the same never-destroy-the-human's-wo
 We enforce that with two tables rather than one, and deliberately **not** an EAV registry:
 
 - A typed **`enrichment`** row per SKU holds the AI care block (enum columns with `CHECK`
-  constraints) and the image metadata. Re-enrichment overwrites this row wholesale — no merge logic.
+  constraints). Re-enrichment overwrites this row wholesale — no merge logic. (Image metadata moved
+  out of this row to its own table — see the 2026-06-25 amendment below.)
 - A sparse **`classifier_override`** table holds only human corrections. A row's presence *is* `manual`
   Provenance and wins on read; re-enrichment never touches this table, so a correction is structurally
   un-clobberable. Provenance is therefore *derived* (override present → `manual`, else the enrichment
@@ -72,7 +73,8 @@ so the test suite exercises parse/store/Provenance logic with a fake and never t
 Image bytes download to a **separate `fishpage-images` R2 bucket** (provisioned alongside the
 Litestream bucket by the OpenTofu bring-up of [ADR 0010](0010-opentofu-bootstrap-for-cloud-infra.md)),
 keeping them out of the bucket `fishpage-restore` reasons about. The database stores only the object
-key plus license/attribution metadata — never the bytes, which would bloat the WAL Litestream streams.
+key plus license/attribution metadata in a dedicated `image` table (see the 2026-06-25 amendment
+below) — never the bytes, which would bloat the WAL Litestream streams.
 The app **proxies** images from R2 rather than exposing a public bucket URL, so they stay behind the
 Cloudflare Access edge exactly like the wholesale prices ([ADR 0007](0007-deploy-to-flyio-cloud-not-unraid.md)'s
 no-public-origin). The cost is image egress on the single Machine — negligible at single-user scale.
@@ -101,3 +103,29 @@ poor result simply means images stay manual-only. We refuse to gate the valuable
   a Fly secret. Both ride the existing opt-in-default-off config.
 - Auto-image coverage is explicitly not guaranteed. Some Items will only ever have a manually-uploaded
   image, and that is an accepted outcome, not a defect.
+
+## Amendment (2026-06-25): image Provenance follows the override pattern, not the `enrichment` row
+
+The original text put image metadata in the typed `enrichment` row alongside the AI care block. That
+could not coexist with two other rules this same ADR sets out:
+
+- **Re-enrichment overwrites the `enrichment` row wholesale** (on-demand re-enrich deletes it), so a
+  value living there *cannot* also be "never overwritten by re-enrichment" — which is exactly what a
+  `manual` image must be.
+- **A SKU is un-enriched precisely when it has no `enrichment` row**, so attaching an image to a
+  not-yet-enriched Item would force that row into existence and silently drop the SKU out of the
+  drainer's Classifier queue.
+
+The resolution is the rule this ADR already applies to Classifiers: a value's **Provenance decides
+where it lives**. A `manual` image is the same kind of value as a `manual` Classifier — human-authored,
+outranks any best-effort sourced value, must survive re-enrichment — so it belongs in the same
+un-clobberable layer, not in the wholesale-overwritten AI row.
+
+Image metadata therefore moves to a dedicated sparse **`image`** table keyed by SKU (`object_key`,
+`license`, `attribution`, `source_url`, `provenance`). The four `image_*` columns the phase-2 schema
+added to `enrichment` are dropped. Re-enrichment clears only *non-`manual`* image rows
+(`DELETE FROM image WHERE sku = ? AND provenance != 'manual'`); the `enrichment` delete, the
+row-absent un-enriched queue, and `enrichment_for` are otherwise untouched. The sourced-image path,
+when the spike ships, writes the same table with `provenance = 'wikimedia'` and *is* re-enrichable;
+the manual upload writes `provenance = 'manual'` and is structurally safe — the image columns and the
+two-table Provenance split are now uniform across Classifiers and images.

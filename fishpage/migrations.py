@@ -60,6 +60,30 @@ MIGRATIONS: list[tuple[int, str]] = [
         );
         """,
     ),
+    (
+        3,
+        # A manual image is the same kind of value as a manual Classifier — human-authored,
+        # outranks any sourced value, must survive re-enrichment — so its metadata lives in its own
+        # table, not the wholesale-overwritten enrichment row. Re-enrichment clears only non-manual
+        # rows here, leaving a manual upload structurally un-clobberable. The four image columns the
+        # phase-2 schema put in enrichment move here; the bytes themselves never touch the database.
+        """
+        CREATE TABLE IF NOT EXISTS image (
+            sku         TEXT PRIMARY KEY,
+            object_key  TEXT NOT NULL,
+            license     TEXT,
+            attribution TEXT,
+            source_url  TEXT,
+            provenance  TEXT NOT NULL CHECK (
+                provenance IN ('manual', 'wikimedia', 'ai-generated')
+            )
+        );
+        ALTER TABLE enrichment DROP COLUMN image_object_key;
+        ALTER TABLE enrichment DROP COLUMN image_license;
+        ALTER TABLE enrichment DROP COLUMN image_attribution;
+        ALTER TABLE enrichment DROP COLUMN image_source_url;
+        """,
+    ),
 ]
 
 
