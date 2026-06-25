@@ -62,6 +62,7 @@ def build_app(settings: Settings):
         incoming_dir=settings.incoming_dir,
         processed_dir=settings.processed_dir,
         image_store=image_store,
+        image_max_dimension=settings.image_max_dimension,
     )
 
 

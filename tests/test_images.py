@@ -10,11 +10,19 @@ import io
 from datetime import date
 from decimal import Decimal
 
+import pytest
 from fastapi.testclient import TestClient
+from PIL import Image
 
 from fishpage.app import create_app
 from fishpage.config import load_settings
-from fishpage.images import R2ImageStore, StoredImage, select_image_store
+from fishpage.images import (
+    ImageDecodeError,
+    R2ImageStore,
+    StoredImage,
+    select_image_store,
+    store_image,
+)
 from fishpage.models import Item, Provenance
 from fishpage.store import image_for, open_store, reconcile
 
@@ -28,7 +36,17 @@ _R2_ENV = {
 
 JUN19 = date(2026, 6, 19)
 ORNATE_M = Item("110042", "M", "Bichir Ornate", Decimal("28.99"), None, 15)
-JPEG = b"\xff\xd8\xff\xe0\x00\x10JFIF fake jpeg bytes"
+
+
+def _real_jpeg(width=64, height=48, color=(20, 120, 200)) -> bytes:
+    """A genuine JPEG the optimization seam can actually decode — the fake magic-byte string a
+    route test would otherwise post can't be transcoded."""
+    buf = io.BytesIO()
+    Image.new("RGB", (width, height), color).save(buf, format="JPEG")
+    return buf.getvalue()
+
+
+JPEG = _real_jpeg()
 
 
 class FakeImageStore:
@@ -61,6 +79,68 @@ def _post_image(client, sku, name="ornate.jpg", data=JPEG, content_type="image/j
     return client.post(f"/items/{sku}/image", files={"file": (name, data, content_type)})
 
 
+def _seeded_conn(tmp_path):
+    conn = open_store(tmp_path / "fishpage.db")
+    reconcile(conn, [ORNATE_M], JUN19)
+    return conn
+
+
+def test_store_image_optimizes_to_webp_and_records_provenance(tmp_path):
+    store = FakeImageStore()
+    conn = _seeded_conn(tmp_path)
+
+    store_image(store, conn, "110042", JPEG, provenance=Provenance.MANUAL, max_dimension=1024)
+
+    # The single seam every source flows through: the bucket holds WebP under the WebP content
+    # type, and the DB records the key + provenance — never the bytes.
+    stored = store.objects["110042"]
+    assert stored.content_type == "image/webp"
+    assert Image.open(io.BytesIO(stored.data)).format == "WEBP"
+    record = image_for(conn, "110042")
+    assert record is not None and record.provenance is Provenance.MANUAL
+
+
+def test_store_image_carries_source_license_for_the_auto_source_path(tmp_path):
+    store = FakeImageStore()
+    conn = _seeded_conn(tmp_path)
+
+    # The same seam the future Wikimedia drainer calls: provenance plus the source's attribution
+    # ride through unchanged, proving optimization isn't bolted onto the manual upload route.
+    store_image(
+        store,
+        conn,
+        "110042",
+        JPEG,
+        provenance=Provenance.WIKIMEDIA,
+        license="CC BY-SA 4.0",
+        attribution="A. Photographer",
+        source_url="https://commons.wikimedia.org/wiki/File:Fish.jpg",
+        max_dimension=1024,
+    )
+
+    record = image_for(conn, "110042")
+    assert record is not None
+    assert record.provenance is Provenance.WIKIMEDIA
+    assert record.license == "CC BY-SA 4.0"
+    assert record.attribution == "A. Photographer"
+    assert record.source_url == "https://commons.wikimedia.org/wiki/File:Fish.jpg"
+
+
+def test_store_image_writes_nothing_when_the_input_cannot_be_decoded(tmp_path):
+    store = FakeImageStore()
+    conn = _seeded_conn(tmp_path)
+
+    with pytest.raises(ImageDecodeError):
+        store_image(
+            store, conn, "110042", b"not an image", provenance=Provenance.MANUAL, max_dimension=1024
+        )
+
+    # Optimization fails before any write, so a corrupt input leaves neither a bucket object nor a
+    # DB row pointing at bytes that can't be served.
+    assert store.objects == {}
+    assert image_for(conn, "110042") is None
+
+
 def test_uploading_an_image_stores_the_bytes_and_records_manual_provenance(tmp_path):
     store = FakeImageStore()
     conn, client = _client(tmp_path, image_store=store)
@@ -68,12 +148,12 @@ def test_uploading_an_image_stores_the_bytes_and_records_manual_provenance(tmp_p
     resp = _post_image(client, "110042")
 
     assert resp.status_code == 200
-    # The bytes land in the bucket, and the DB records only the key + manual Provenance — never the
-    # bytes. The recorded key is exactly what was stored.
+    # The bytes land in the bucket optimized to WebP, and the DB records only the key + manual
+    # Provenance — never the bytes. The recorded key is exactly what was stored.
     record = image_for(conn, "110042")
     assert record is not None
     assert record.provenance is Provenance.MANUAL
-    assert store.objects[record.object_key].data == JPEG
+    assert Image.open(io.BytesIO(store.objects[record.object_key].data)).format == "WEBP"
 
 
 def test_an_uploaded_image_is_served_back_proxied_through_the_app(tmp_path):
@@ -84,10 +164,11 @@ def test_an_uploaded_image_is_served_back_proxied_through_the_app(tmp_path):
     resp = client.get("/items/110042/image")
 
     # The app proxies the bytes from R2 itself — no redirect to a public bucket URL — so the image
-    # stays behind the Access edge. Content type is preserved from the upload.
+    # stays behind the Access edge. It is served as the optimized WebP that was stored, regardless
+    # of the upload's original content type.
     assert resp.status_code == 200
-    assert resp.content == JPEG
-    assert resp.headers["content-type"] == "image/jpeg"
+    assert resp.headers["content-type"] == "image/webp"
+    assert Image.open(io.BytesIO(resp.content)).format == "WEBP"
 
 
 def test_an_uploaded_image_shows_on_the_catalog_card(tmp_path):
@@ -116,6 +197,19 @@ def test_uploading_an_image_for_an_unknown_sku_is_404(tmp_path):
     # Nothing was stored for a SKU the catalog does not know — neither bytes nor a DB row.
     assert image_for(conn, "999999") is None
     assert store.objects == {}
+
+
+def test_uploading_a_non_image_is_rejected_and_stores_nothing(tmp_path):
+    store = FakeImageStore()
+    conn, client = _client(tmp_path, image_store=store)
+
+    resp = _post_image(client, "110042", data=b"this is not an image", content_type="image/jpeg")
+
+    # A corrupt or non-image upload can't be transcoded, so it fails at the door with a 400 rather
+    # than storing a file the proxy could never serve. Nothing lands in the bucket or the DB.
+    assert resp.status_code == 400
+    assert store.objects == {}
+    assert image_for(conn, "110042") is None
 
 
 def test_uploading_with_images_disabled_is_rejected_not_silently_dropped(tmp_path):

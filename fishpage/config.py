@@ -34,6 +34,7 @@ class Settings:
     enrichment_enabled: bool
     anthropic_api_key: str | None
     images_enabled: bool
+    image_max_dimension: int
     r2_images_bucket: str | None
     r2_images_endpoint: str | None
     r2_images_access_key_id: str | None
@@ -56,6 +57,9 @@ def load_settings(env: Mapping[str, str]) -> Settings:
         enrichment_enabled=_flag(env.get("ENRICHMENT_ENABLED")),
         anthropic_api_key=env.get("ANTHROPIC_API_KEY"),
         images_enabled=_flag(env.get("FISHPAGE_IMAGES_ENABLED")),
+        # The long-edge cap optimization downscales every stored image to; 1024 px keeps a card's
+        # ~400 px render crisp without holding the multi-megapixel phone original.
+        image_max_dimension=int(env.get("IMAGE_MAX_DIMENSION", "1024")),
         r2_images_bucket=env.get("R2_IMAGES_BUCKET"),
         r2_images_endpoint=env.get("R2_IMAGES_ENDPOINT"),
         r2_images_access_key_id=env.get("R2_IMAGES_ACCESS_KEY_ID"),
