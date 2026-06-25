@@ -9,6 +9,7 @@ background watcher then reconciles any Stocklist PDF dropped into the incoming d
 same connection the app serves from, unless cloud ingestion is configured to drive that instead.
 """
 
+import logging
 import os
 import socket
 import sqlite3
@@ -27,15 +28,17 @@ from fishpage.images import select_image_store
 from fishpage.ingest import watch_incoming
 from fishpage.store import open_store
 
+_log = logging.getLogger(__name__)
+
 
 def build_app(settings: Settings):
     conn = open_store(settings.db_path)
     observability.track_catalog_freshness(conn)
     loaded = seed_if_empty(conn, settings.pdf_path)
     if loaded:
-        print(f"Seeded {loaded} Items from {settings.pdf_path.name}")
+        _log.info("Seeded %d Items from %s", loaded, settings.pdf_path.name)
     else:
-        print(f"Reusing existing catalog at {settings.db_path}")
+        _log.info("Reusing existing catalog at %s", settings.db_path)
 
     if not settings.cloud_ingestion:
         watcher = threading.Thread(
@@ -45,17 +48,18 @@ def build_app(settings: Settings):
             daemon=True,
         )
         watcher.start()
-        print(
-            f"Watching {settings.incoming_dir} for dropped Stocklists "
-            f"(every {settings.poll_interval:g}s)"
+        _log.info(
+            "Watching %s for dropped Stocklists (every %gs)",
+            settings.incoming_dir,
+            settings.poll_interval,
         )
 
     if start_drainer(conn, settings) is not None:
-        print("Enrichment drainer running — filling un-enriched Items in the background")
+        _log.info("Enrichment drainer running — filling un-enriched Items in the background")
 
     image_store = select_image_store(settings)
     if image_store is not None:
-        print("Image bucket configured — manual uploads stored in R2 and proxied through the app")
+        _log.info("Image bucket configured — manual uploads stored in R2 and proxied by the app")
 
     return create_app(
         conn,
@@ -117,7 +121,13 @@ def main():
     observability.configure_logging(settings)
     # Configure telemetry before building the app so the providers and the catalog-freshness
     # gauge are installed when the app and its connection register against them.
-    observability.configure(settings)
+    exporting = observability.configure(settings)
+    # One heartbeat through the logging path on every boot, so a deploy lands a verifiable line
+    # locally and in Grafana even before any ingest or enrichment event fires.
+    _log.info(
+        "fishpage starting",
+        extra={"host": settings.host, "port": settings.port, "otlp_export": exporting},
+    )
     sock = listening_socket(settings.host, settings.port)
     uvicorn.run(build_app(settings), fd=sock.fileno())
 
