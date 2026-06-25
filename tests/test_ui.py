@@ -76,6 +76,89 @@ def test_stylesheet_adapts_to_dark_mode_with_a_single_accent(tmp_path):
     assert "--accent" in css
 
 
+def test_htmx_runtime_is_vendored_on_the_static_mount(tmp_path):
+    resp = _client(tmp_path).get("/static/htmx.min.js")
+
+    # The HTMX runtime is carried by the app itself on the existing /static mount, not pulled from
+    # a CDN — the app runs behind a tunnel with no public origin, so the UI must be self-contained
+    # and testable offline. It is the htmx 4 beta the catalog is built against.
+    assert resp.status_code == 200
+    assert "javascript" in resp.headers["content-type"]
+    assert "4.0.0-beta4" in resp.text
+
+
+def test_index_returns_only_the_grid_partial_for_an_htmx_request(tmp_path):
+    resp = _client(tmp_path).get("/", headers={"HX-Request": "true"})
+
+    # An HTMX request to the one catalog route gets back just the grid fragment to swap in — the
+    # cards, with none of the surrounding page shell or filter form.
+    html = resp.text
+    assert 'data-sku="110042"' in html
+    assert "<!doctype" not in html.lower()
+    assert "<form" not in html
+
+
+def test_index_returns_the_full_page_without_the_htmx_header(tmp_path):
+    html = _client(tmp_path).get("/").text
+
+    # A normal browser navigation (no HX-Request header) still renders the whole page: the document
+    # shell and the filter form, with the grid inside it.
+    assert "<!doctype" in html.lower()
+    assert "<form" in html
+    assert 'data-sku="110042"' in html
+
+
+def test_htmx_grid_partial_reflects_the_active_filters(tmp_path):
+    conn = open_store(tmp_path / "fishpage.db")
+    leaf = Item("110092", "-", "Leaf Fish", Decimal("5.99"), None, 30)
+    reconcile(conn, [ORNATE_M, leaf], JUN19)
+    client = TestClient(create_app(conn))
+
+    resp = client.get("/", params={"search": "leaf"}, headers={"HX-Request": "true"})
+
+    # The swapped-in fragment is filtered, not the whole catalog: the same query string that
+    # narrows the full page narrows the partial, so the bookmarkable URL and the live swap agree.
+    html = resp.text
+    assert 'data-sku="110092"' in html
+    assert 'data-sku="110042"' not in html
+
+
+def test_filter_form_is_wired_to_swap_the_grid_and_push_the_url(tmp_path):
+    html = _client(tmp_path).get("/").text
+    form = html[html.index("<form") : html.index("</form>")]
+
+    # Changing a filter issues an HTMX GET to the same canonical route, swaps just the grid
+    # fragment in place, and pushes the matching URL into the address bar so a reload or the back
+    # button reproduces the filtered view.
+    assert 'hx-get="/"' in form
+    assert 'hx-target=".catalog-grid"' in form
+    assert 'hx-push-url="true"' in form
+
+
+def test_filter_form_still_filters_with_javascript_disabled(tmp_path):
+    html = _client(tmp_path).get("/").text
+    form = html[html.index("<form") : html.index("</form>")]
+
+    # With no JS, HTMX never loads — so the form must work as a plain HTML control: a native GET
+    # to the same canonical route, submittable without script. The old inline onchange-submit is
+    # gone (it both needed JS and would double-fire against HTMX); a real submit button replaces it.
+    assert 'method="get"' in form
+    assert 'action="/"' in form
+    assert 'type="submit"' in form
+    assert "this.form.submit()" not in form
+
+
+def test_catalog_loads_htmx_from_the_static_mount_not_a_cdn(tmp_path):
+    html = _client(tmp_path).get("/").text
+
+    # The base layout pulls the runtime from the vendored copy, exactly once, and nothing on the
+    # page reaches out to a CDN — a stray external script would defeat the no-public-origin design.
+    assert html.count('<script src="/static/htmx.min.js"') == 1
+    assert "unpkg.com" not in html
+    assert "jsdelivr" not in html
+    assert "cdn." not in html
+
+
 def test_upload_page_links_the_same_stylesheet(tmp_path):
     html = _client(tmp_path).get("/upload").text
 

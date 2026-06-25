@@ -135,12 +135,13 @@ def test_index_shows_out_of_stock_cards_when_toggled(tmp_path):
     assert 'data-sku="110200"' in html
 
 
-def test_index_has_auto_submitting_stock_toggle_unchecked_by_default(tmp_path):
+def test_index_stock_toggle_filters_on_change_unchecked_by_default(tmp_path):
     html = client(tmp_path).get("/").text
 
-    # A checkbox bound to the query param, auto-submitting its form on change.
+    # A checkbox bound to the query param, inside the change-triggered filter form, so toggling it
+    # re-filters the grid without a manual submit.
     assert 'name="include_out_of_stock"' in html
-    assert "this.form.submit()" in html
+    assert 'hx-trigger="change, submit"' in html
     # Default view is In stock only, so the control is not checked.
     assert " checked" not in html
 
@@ -229,12 +230,13 @@ def test_index_filters_grid_by_search(tmp_path):
     assert 'data-sku="170011"' not in html  # Barb excluded
 
 
-def test_index_has_auto_submitting_category_dropdown(tmp_path):
+def test_index_category_dropdown_filters_on_change(tmp_path):
     html = categorized_client(tmp_path).get("/").text
 
-    # A select bound to the query param, auto-submitting on change, with an option per
-    # present category plus an empty "all categories" default.
-    assert '<select name="category" onchange="this.form.submit()"' in html
+    # A select bound to the query param, inside the change-triggered filter form, with an option
+    # per present category plus an empty "all categories" default.
+    assert '<select name="category"' in html
+    assert 'hx-trigger="change, submit"' in html
     assert '<option value="">' in html
     assert '<option value="Angelfish"' in html
     assert '<option value="Barb"' in html
@@ -318,12 +320,13 @@ def test_catalog_combines_out_of_stock_toggle_with_on_special(tmp_path):
     assert {i["sku"] for i in resp.json()} == {"120095", "120096"}
 
 
-def test_index_has_auto_submitting_size_dropdown(tmp_path):
+def test_index_size_dropdown_filters_on_change(tmp_path):
     html = client(tmp_path).get("/").text
 
-    # A select bound to the query param, auto-submitting on change, with the fixed grade set
-    # plus an empty "all sizes" default.
-    assert '<select name="size" onchange="this.form.submit()"' in html
+    # A select bound to the query param, inside the change-triggered filter form, with the fixed
+    # grade set plus an empty "all sizes" default.
+    assert '<select name="size"' in html
+    assert 'hx-trigger="change, submit"' in html
     for grade in ("-", "S", "M", "L", "Jumbo"):
         assert f'<option value="{grade}"' in html
 
@@ -341,12 +344,13 @@ def _on_special_input(html):
     return html[start : html.index(">", start) + 1]
 
 
-def test_index_has_auto_submitting_on_special_toggle_unchecked_by_default(tmp_path):
-    tag = _on_special_input(client(tmp_path).get("/").text)
+def test_index_on_special_toggle_filters_on_change_unchecked_by_default(tmp_path):
+    html = client(tmp_path).get("/").text
 
-    # The on-special input auto-submits on change and is off by default.
-    assert "this.form.submit()" in tag
-    assert "checked" not in tag
+    # The on-special input is bound and off by default; the enclosing change-triggered filter form
+    # re-filters the grid the moment it is ticked.
+    assert "checked" not in _on_special_input(html)
+    assert 'hx-trigger="change, submit"' in html
 
 
 def test_index_on_special_toggle_is_checked_when_active(tmp_path):
@@ -355,12 +359,13 @@ def test_index_on_special_toggle_is_checked_when_active(tmp_path):
     assert "checked" in tag
 
 
-def test_index_has_auto_submitting_sort_dropdown(tmp_path):
+def test_index_sort_dropdown_filters_on_change(tmp_path):
     html = client(tmp_path).get("/").text
 
-    # A select bound to the query param, auto-submitting on change, offering both effective
-    # price directions plus a default order.
-    assert '<select name="sort" onchange="this.form.submit()"' in html
+    # A select bound to the query param, inside the change-triggered filter form, offering both
+    # effective price directions plus a default order.
+    assert '<select name="sort"' in html
+    assert 'hx-trigger="change, submit"' in html
     assert '<option value="price_asc"' in html
     assert '<option value="price_desc"' in html
 
