@@ -1,7 +1,9 @@
 import socket
+import threading
 
 import pytest
 
+import fishpage.__main__ as main
 from fishpage.__main__ import listening_socket, start_drainer
 from fishpage.config import load_settings
 from fishpage.store import open_store
@@ -54,3 +56,20 @@ def test_drainer_starts_when_enrichment_is_enabled_and_keyed(tmp_path):
     # app serves from — so it drains the live catalog's queue.
     assert len(spawned) == 1
     assert spawned[0][0] is conn
+
+
+def test_start_drainer_launches_a_daemon_thread_by_default(tmp_path, monkeypatch):
+    conn = open_store(tmp_path / "fishpage.db")
+    ran = threading.Event()
+    # Stub the forever-loop so the spawned thread runs once and exits instead of polling forever.
+    monkeypatch.setattr(main, "run_drainer", lambda *a, **k: ran.set())
+    settings = load_settings({"ENRICHMENT_ENABLED": "1", "ANTHROPIC_API_KEY": "sk-ant-test"})
+
+    thread = start_drainer(conn, settings)
+
+    # The default spawn runs the drain loop on a background daemon thread — daemon so it never
+    # blocks process shutdown — against the live connection.
+    assert isinstance(thread, threading.Thread)
+    assert thread.daemon
+    thread.join(timeout=2)
+    assert ran.is_set()

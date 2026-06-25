@@ -8,10 +8,18 @@ default-off, and the suite never reaches for a credential.
 from datetime import date
 from decimal import Decimal
 
-from fishpage.drainer import drain_pending
+import pytest
+
+import fishpage.drainer as drainer
+from fishpage.drainer import drain_pending, run_drainer
 from fishpage.enricher import Difficulty, EnrichmentResult, PlantSafe, Temperament
 from fishpage.models import Item
 from fishpage.store import enrichment_for, open_store, reconcile, unenriched_items
+
+
+class _Stop(Exception):
+    """Raised from the injected sleeper to break the otherwise-infinite drain loop in a test."""
+
 
 JUN19 = date(2026, 6, 19)
 ORNATE_M = Item("110042", "M", "Bichir Ornate", Decimal("28.99"), None, 15)
@@ -107,3 +115,38 @@ def test_drain_pending_paces_calls_with_the_injected_sleeper(tmp_path):
     # Each enrichment is a network round-trip, so the pass rate-limits itself between SKUs rather
     # than firing the whole queue at the API at once.
     assert pauses == [0.5, 0.5]
+
+
+def test_run_drainer_drains_a_pass_then_sleeps_the_interval(tmp_path):
+    conn = open_store(tmp_path / "fishpage.db")
+    reconcile(conn, [ORNATE_M], JUN19)
+    pauses: list[float] = []
+
+    def stop_after_first(seconds: float) -> None:
+        pauses.append(seconds)
+        raise _Stop
+
+    # The poll loop runs one drain pass, emptying the queue, then sleeps the inter-pass interval —
+    # which the injected sleeper turns into a clean break instead of looping forever.
+    with pytest.raises(_Stop):
+        run_drainer(conn, RecordingEnricher(), interval=30.0, rate=0.0, sleep=stop_after_first)
+
+    assert unenriched_items(conn) == []
+    assert pauses == [30.0]
+
+
+def test_run_drainer_survives_a_failed_pass_and_keeps_polling(tmp_path, monkeypatch):
+    conn = open_store(tmp_path / "fishpage.db")
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("queue read blew up")
+
+    monkeypatch.setattr(drainer, "drain_pending", boom)
+
+    def stop_after_first(seconds: float) -> None:
+        raise _Stop
+
+    # A pass that throws is swallowed, so the loop reaches its sleep and would poll again rather
+    # than dying — one bad pass never takes the drainer down.
+    with pytest.raises(_Stop):
+        run_drainer(conn, RecordingEnricher(), interval=30.0, sleep=stop_after_first)
