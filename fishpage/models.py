@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 from enum import StrEnum
 
@@ -23,6 +23,10 @@ class ImageRecord:
     """One Item's image metadata — the R2 object key plus its license/attribution, never the bytes.
 
     ``provenance`` records who supplied it; a ``MANUAL`` image is un-clobberable by re-enrichment.
+
+    ``uploaded_by`` and ``uploaded_at`` are the Uploader — which human attached a ``MANUAL`` image
+    and when. Both are meaningful only for ``MANUAL`` images; the auto-source path has no human
+    Uploader and leaves them ``None``, the way it leaves ``license``/``attribution`` unset.
     """
 
     object_key: str
@@ -30,6 +34,8 @@ class ImageRecord:
     attribution: str | None
     source_url: str | None
     provenance: Provenance
+    uploaded_by: str | None = None
+    uploaded_at: datetime | None = None
 
 
 @dataclass(frozen=True)

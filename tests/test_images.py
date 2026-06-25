@@ -7,7 +7,8 @@ reaches for a real bucket.
 """
 
 import io
-from datetime import date
+import logging
+from datetime import UTC, date, datetime
 from decimal import Decimal
 
 import pytest
@@ -75,8 +76,10 @@ def _client(tmp_path, *, image_store=None, seed=(ORNATE_M,)):
     return conn, TestClient(app)
 
 
-def _post_image(client, sku, name="ornate.jpg", data=JPEG, content_type="image/jpeg"):
-    return client.post(f"/items/{sku}/image", files={"file": (name, data, content_type)})
+def _post_image(client, sku, name="ornate.jpg", data=JPEG, content_type="image/jpeg", headers=None):
+    return client.post(
+        f"/items/{sku}/image", files={"file": (name, data, content_type)}, headers=headers
+    )
 
 
 def _seeded_conn(tmp_path):
@@ -98,6 +101,30 @@ def test_store_image_optimizes_to_webp_and_records_provenance(tmp_path):
     assert Image.open(io.BytesIO(stored.data)).format == "WEBP"
     record = image_for(conn, "110042")
     assert record is not None and record.provenance is Provenance.MANUAL
+
+
+def test_store_image_records_the_uploader_and_when_for_a_manual_upload(tmp_path):
+    store = FakeImageStore()
+    conn = _seeded_conn(tmp_path)
+    uploaded_at = datetime(2026, 6, 25, 12, 0, tzinfo=UTC)
+
+    store_image(
+        store,
+        conn,
+        "110042",
+        JPEG,
+        provenance=Provenance.MANUAL,
+        uploaded_by="alice@example.com",
+        now=lambda: uploaded_at,
+        max_dimension=1024,
+    )
+
+    # The Uploader and the moment it landed are stamped on the image row, durable in the catalog —
+    # so the catalog can answer who attached this image, and when, straight from the DB.
+    record = image_for(conn, "110042")
+    assert record is not None
+    assert record.uploaded_by == "alice@example.com"
+    assert record.uploaded_at == uploaded_at
 
 
 def test_store_image_carries_source_license_for_the_auto_source_path(tmp_path):
@@ -124,6 +151,10 @@ def test_store_image_carries_source_license_for_the_auto_source_path(tmp_path):
     assert record.license == "CC BY-SA 4.0"
     assert record.attribution == "A. Photographer"
     assert record.source_url == "https://commons.wikimedia.org/wiki/File:Fish.jpg"
+    # The auto-source path has no human Uploader, so it leaves both unset — the credited
+    # photographer rides in `attribution`, a different "who" than the Uploader.
+    assert record.uploaded_by is None
+    assert record.uploaded_at is None
 
 
 def test_store_image_writes_nothing_when_the_input_cannot_be_decoded(tmp_path):
@@ -154,6 +185,57 @@ def test_uploading_an_image_stores_the_bytes_and_records_manual_provenance(tmp_p
     assert record is not None
     assert record.provenance is Provenance.MANUAL
     assert Image.open(io.BytesIO(store.objects[record.object_key].data)).format == "WEBP"
+
+
+def test_uploading_an_image_credits_the_access_authenticated_user_as_uploader(tmp_path):
+    store = FakeImageStore()
+    conn, client = _client(tmp_path, image_store=store)
+
+    resp = _post_image(
+        client, "110042", headers={"Cf-Access-Authenticated-User-Email": "alice@example.com"}
+    )
+
+    assert resp.status_code == 200
+    # Access authenticated the human at the edge and injected their email; the route credits it as
+    # the Uploader and stamps when it landed, so the catalog knows who attached this image and when.
+    record = image_for(conn, "110042")
+    assert record is not None
+    assert record.uploaded_by == "alice@example.com"
+    assert record.uploaded_at is not None
+
+
+def test_uploading_an_image_off_the_access_edge_records_a_neutral_uploader(tmp_path):
+    store = FakeImageStore()
+    conn, client = _client(tmp_path, image_store=store)
+
+    # No Access header — a local run or the test suite. A missing identity must never fail a working
+    # upload, so it succeeds and is credited to a neutral placeholder rather than rejected.
+    resp = _post_image(client, "110042")
+
+    assert resp.status_code == 200
+    record = image_for(conn, "110042")
+    assert record is not None
+    assert record.uploaded_by == "unknown"
+
+
+def test_a_successful_upload_emits_a_structured_event(tmp_path, caplog):
+    _, client = _client(tmp_path, image_store=FakeImageStore())
+
+    with caplog.at_level(logging.INFO, logger="fishpage"):
+        _post_image(
+            client, "110042", headers={"Cf-Access-Authenticated-User-Email": "alice@example.com"}
+        )
+
+    # A successful upload narrates itself as one INFO event carrying the Uploader, SKU, and
+    # Provenance as structured fields — so the recent-uploads view answers "who attached what" from
+    # the logs (within retention) the way the DB answers it forever.
+    events = [r for r in caplog.records if getattr(r, "uploader", None) is not None]
+    assert len(events) == 1
+    event = events[0]
+    assert event.levelno == logging.INFO
+    assert event.uploader == "alice@example.com"
+    assert event.sku == "110042"
+    assert event.provenance == "manual"
 
 
 def test_an_uploaded_image_is_served_back_proxied_through_the_app(tmp_path):
