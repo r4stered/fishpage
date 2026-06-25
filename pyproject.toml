@@ -12,6 +12,7 @@ dependencies = [
     "rapidfuzz>=3.14.5",
     "anthropic>=0.69",
     "boto3>=1.34",
+    "pillow>=11",
     "opentelemetry-sdk>=1.43.0",
     "opentelemetry-exporter-otlp-proto-http>=1.43.0",
     "opentelemetry-instrumentation-fastapi>=0.64b0",

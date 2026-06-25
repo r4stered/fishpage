@@ -7,10 +7,16 @@ opt-in and default-off and is dependency-injected: the test suite exercises the 
 in-memory fake with no bucket and no credentials, the way the enricher is faked.
 """
 
+import io
+import sqlite3
 from dataclasses import dataclass
 from typing import Any, Protocol, runtime_checkable
 
+from PIL import Image, UnidentifiedImageError
+
 from fishpage.config import Settings
+from fishpage.models import Provenance
+from fishpage.store import attach_image
 
 
 @dataclass(frozen=True)
@@ -21,6 +27,31 @@ class StoredImage:
     content_type: str
 
 
+class ImageDecodeError(ValueError):
+    """Raised when input bytes are not a decodable image, so nothing gets stored."""
+
+
+def optimize_image(raw_bytes: bytes, *, max_dimension: int) -> StoredImage:
+    """Transcode any image to downscaled WebP — the single seam every stored image flows through.
+
+    Re-encodes to WebP at a sensible quality and shrinks the long edge to ``max_dimension`` so a
+    huge phone original can't bloat the bucket or a card render; an already-small image is left at
+    its size rather than upscaled. Pure in-memory compute with no network. Non-image or corrupt
+    input raises :class:`ImageDecodeError` rather than yielding a file that can't be served.
+    """
+    try:
+        image = Image.open(io.BytesIO(raw_bytes))
+        image.load()
+    except (UnidentifiedImageError, OSError) as exc:
+        raise ImageDecodeError(str(exc)) from exc
+    # thumbnail() scales the long edge down to the cap in place and is a no-op when the image
+    # already fits, so a small original is never upscaled.
+    image.thumbnail((max_dimension, max_dimension))
+    buf = io.BytesIO()
+    image.save(buf, format="WEBP", quality=80)
+    return StoredImage(data=buf.getvalue(), content_type="image/webp")
+
+
 @runtime_checkable
 class ImageStore(Protocol):
     """The injectable bucket: put image bytes under a key, and read them back to proxy."""
@@ -28,6 +59,41 @@ class ImageStore(Protocol):
     def put(self, key: str, data: bytes, *, content_type: str) -> None: ...
 
     def get(self, key: str) -> StoredImage | None: ...
+
+
+def store_image(
+    image_store: ImageStore,
+    conn: sqlite3.Connection,
+    sku: str,
+    raw_bytes: bytes,
+    *,
+    provenance: Provenance,
+    license: str | None = None,
+    attribution: str | None = None,
+    source_url: str | None = None,
+    max_dimension: int,
+) -> None:
+    """Optimize raw bytes to WebP, put them in the bucket, and record the metadata — the one write
+    path every stored image takes.
+
+    Both sources call this: the manual upload route with ``provenance=MANUAL``, and the future
+    auto-source drainer with ``provenance=WIKIMEDIA`` plus the source's license/attribution. Routing
+    every write through here is what keeps the two paths from diverging on optimization. The SKU is
+    the object key, so one Item has one image and a re-store overwrites in place. Optimization runs
+    first and raises :class:`ImageDecodeError` on a bad input *before* any write, so a corrupt image
+    leaves nothing behind in the bucket or the DB.
+    """
+    optimized = optimize_image(raw_bytes, max_dimension=max_dimension)
+    image_store.put(sku, optimized.data, content_type=optimized.content_type)
+    attach_image(
+        conn,
+        sku,
+        object_key=sku,
+        license=license,
+        attribution=attribution,
+        source_url=source_url,
+        provenance=provenance,
+    )
 
 
 class R2ImageStore:

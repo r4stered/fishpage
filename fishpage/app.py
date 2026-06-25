@@ -9,13 +9,12 @@ from fastapi.staticfiles import StaticFiles
 
 from fishpage import observability
 from fishpage.browse import SIZE_GRADES, browse
-from fishpage.images import ImageStore
+from fishpage.images import ImageDecodeError, ImageStore, store_image
 from fishpage.ingest import ingest_pending, stocklist_date
-from fishpage.models import Item
+from fishpage.models import Item, Provenance
 from fishpage.render import render_catalog, render_grid, render_upload
 from fishpage.store import (
     all_items,
-    attach_image,
     clear_enrichment,
     image_for,
     item_exists,
@@ -50,6 +49,7 @@ def create_app(
     incoming_dir: Path | None = None,
     processed_dir: Path | None = None,
     image_store: ImageStore | None = None,
+    image_max_dimension: int = 1024,
 ) -> FastAPI:
     app = FastAPI(title="Fishpage")
     observability.instrument_fastapi(app)
@@ -97,19 +97,29 @@ def create_app(
 
     @app.post("/items/{sku}/image")
     async def upload_image(sku: str, file: UploadFile) -> Response:
-        # Manual image upload: store the bytes in the images bucket and record only the object key
-        # plus manual Provenance in the DB. The bytes never touch SQLite — only the key does — so
-        # the WAL Litestream streams stays small. A manual image is un-clobberable by re-enrichment.
+        # Manual image upload: hand the raw bytes to the shared store_image seam, which optimizes to
+        # WebP, puts them in the bucket, and records only the object key plus manual Provenance. The
+        # bytes never touch SQLite — only the key does — so the WAL Litestream streams stays small.
+        # A manual image is un-clobberable by re-enrichment.
         if image_store is None:
             return JSONResponse({"detail": "image storage is not configured"}, status_code=503)
         if not item_exists(conn, sku):
             return JSONResponse({"detail": f"unknown SKU {sku}"}, status_code=404)
-        # One image per Item: the SKU is the object key, so a re-upload overwrites in place rather
-        # than orphaning bytes in the bucket.
-        key = sku
-        content_type = file.content_type or "application/octet-stream"
-        image_store.put(key, await file.read(), content_type=content_type)
-        attach_image(conn, sku, object_key=key)
+        try:
+            store_image(
+                image_store,
+                conn,
+                sku,
+                await file.read(),
+                provenance=Provenance.MANUAL,
+                max_dimension=image_max_dimension,
+            )
+        except ImageDecodeError:
+            # A non-image or corrupt upload can't be transcoded; reject it at the door rather than
+            # storing a file the proxy could never serve.
+            return JSONResponse(
+                {"detail": "uploaded file is not a decodable image"}, status_code=400
+            )
         # Post/redirect/get back to the catalog so a browser form lands on the refreshed grid (the
         # card now shows the proxied image) without re-posting on reload, and works with no JS.
         return RedirectResponse(url="/", status_code=303)
