@@ -73,3 +73,10 @@ The recorded origin of an enriched value on an Item — one of `manual`, `wikime
 human fact versus a best-effort AI guess. `manual` is authoritative: re-running Enrichment never
 overwrites a `manual` value, the way an Item's SKU is never deleted.
 _Avoid_: confidence, score (Provenance is the source of a value, not a numeric certainty about it)
+
+**Uploader**:
+The authenticated person credited with a `manual` image — the Cloudflare Access identity of whoever
+attached it. Records *which* human stands behind a `manual` Provenance, where Provenance alone says
+only *that* a human did. Absent on non-`manual` images, which have no human uploader.
+_Avoid_: confusing with `attribution` (the external photographer credited on a `wikimedia` image — a
+different "who"); author, owner.
