@@ -1,12 +1,8 @@
-<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <title>Fishpage — Catalog</title>
-</head>
-<body>
+{% extends "base.html" %}
+{% block title %}Fishpage — Catalog{% endblock %}
+{% block body %}
   <h1>Catalog</h1>
-  <p><a href="/upload">Upload a Stocklist</a></p>
+  <p><a class="button" href="/upload">Upload a Stocklist</a></p>
   <form class="filters" method="get" action="/">
     <label>
       Search
@@ -50,19 +46,5 @@
     </label>
   </form>
   <p>{{ items|length }} Items</p>
-  <ul class="catalog-grid">
-    {% for item in items %}
-    <li class="card" data-sku="{{ item.sku }}">
-      <img class="placeholder" src="/static/placeholder.svg" alt="placeholder image for {{ item.name }}">
-      <h2 class="name">{{ item.name }}</h2>
-      <span class="size">{{ item.size }}</span>
-      <span class="retail-price">${{ item.retail_price }}</span>
-      {% if item.special_price is not none %}
-      <span class="special-price">special ${{ item.special_price }}</span>
-      {% endif %}
-      <span class="qty">{{ item.qty_avail }} available</span>
-    </li>
-    {% endfor %}
-  </ul>
-</body>
-</html>
+  {% include "_grid.html" %}
+{% endblock %}

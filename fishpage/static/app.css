@@ -1,0 +1,293 @@
+/* Hand-rolled stylesheet for the catalog — no framework, no build step. Greyscale with a single
+   muted accent, spent only on links and the active filter control. Light by default; the whole
+   palette flips under a dark preference. Variables only, no toggle UI. */
+
+:root {
+  color-scheme: light dark;
+
+  --bg: #fbfbfa;
+  --surface: #ffffff;
+  --text: #1c1c1a;
+  --muted: #6b6b66;
+  --border: #dcdcd6;
+  --placeholder: #eceae5;
+  --accent: #4a6d7c;
+
+  --radius: 8px;
+  --gap: 1rem;
+  --measure: 70rem;
+
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  line-height: 1.5;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #16171a;
+    --surface: #1f2024;
+    --text: #e7e7e4;
+    --muted: #9a9a93;
+    --border: #34353a;
+    --placeholder: #2a2b30;
+    --accent: #8fb3c4;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0 auto;
+  padding: 1.5rem 1.25rem 3rem;
+  max-width: var(--measure);
+  color: var(--text);
+  background: var(--bg);
+}
+
+h1 {
+  font-size: 1.5rem;
+  margin: 0 0 0.75rem;
+}
+
+a {
+  color: var(--accent);
+}
+
+/* A filled call-to-action. Text uses the page background so it stays legible against the accent
+   in both themes. */
+.button {
+  display: inline-block;
+  padding: 0.5rem 0.9rem;
+  font: inherit;
+  font-weight: 600;
+  color: var(--bg);
+  background: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.button:hover {
+  filter: brightness(1.06);
+}
+
+/* A quieter, secondary action: outlined rather than filled, so it sits beside a primary button
+   without competing with it. */
+.button-secondary {
+  color: var(--accent);
+  background: transparent;
+  border-color: var(--border);
+}
+
+.button-secondary:hover {
+  filter: none;
+  border-color: var(--accent);
+}
+
+.button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Filters: a wrapping row of labelled controls. Each field label stacks its caption above its
+   control; checkbox labels instead sit inline. */
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 0.85rem 1rem;
+  margin: 1rem 0;
+  padding: 1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.filters label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  flex: 1 1 12rem;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+/* A checkbox belongs beside its caption, not under it, and hugs its content rather than
+   stretching to a field's width. Nudged up so it sits level with the boxed controls. */
+.filters label:has(input[type="checkbox"]) {
+  flex: 0 0 auto;
+  flex-direction: row;
+  align-items: center;
+  gap: 0.4rem;
+  padding-bottom: 0.55rem;
+}
+
+.filters input[type="search"],
+.filters select {
+  font: inherit;
+  width: 100%;
+  height: 2.4rem;
+  padding: 0 0.7rem;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+/* Drop the native arrow for a custom chevron with breathing room from the edge; a mid-grey
+   reads on both themes. */
+.filters select {
+  appearance: none;
+  padding-right: 2rem;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' fill='none' stroke='%23888' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 4.5 6 7.5 9 4.5'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.7rem center;
+  background-size: 0.7rem;
+}
+
+/* The one place an active control earns the accent: a focused/used filter input. */
+.filters input:focus,
+.filters select:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+  border-color: var(--accent);
+}
+
+/* On a phone the row collapses to a clean single column of full-width controls. */
+@media (max-width: 480px) {
+  .filters {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  /* Column flow turns flex-basis into a height, so the row's 12rem field width would become
+     12rem of dead vertical space. Let every label shrink back to its content. */
+  .filters label {
+    flex: 0 0 auto;
+  }
+
+  .filters label:has(input[type="checkbox"]) {
+    padding-bottom: 0;
+  }
+}
+
+/* Card grid: fluid columns that pack as many ~220px cards per row as fit. */
+.catalog-grid {
+  list-style: none;
+  margin: 1rem 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: var(--gap);
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+/* Fixed aspect ratio + cover so mismatched or placeholder images never break the row. */
+.card img {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  border-radius: 6px;
+  background: var(--placeholder);
+}
+
+.card .name {
+  font-size: 1rem;
+  margin: 0.25rem 0 0;
+}
+
+.card .size,
+.card .qty {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.card .retail-price {
+  font-weight: 600;
+}
+
+.card .special-price {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+/* Upload page: a focused, narrower column with the form boxed like the catalog's filter bar. */
+.upload {
+  max-width: 38rem;
+}
+
+.upload .intro {
+  color: var(--muted);
+}
+
+.upload code {
+  padding: 0.05rem 0.3rem;
+  background: var(--placeholder);
+  border-radius: 4px;
+}
+
+.upload-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 1.25rem 0;
+  padding: 1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.upload-form input[type="file"] {
+  flex: 1 1 14rem;
+  font: inherit;
+  color: var(--text);
+}
+
+/* Bring the browser's file-picker button in line with our other controls. */
+.upload-form input[type="file"]::file-selector-button {
+  margin-right: 0.75rem;
+  padding: 0.45rem 0.8rem;
+  font: inherit;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.upload-form input[type="file"]::file-selector-button:hover {
+  border-color: var(--accent);
+}
+
+/* Post-submit status, kept on-palette: a bordered box whose left edge signals the outcome —
+   accent for success, the full text colour (heavier) for a rejection. */
+.upload .status {
+  margin: 1.25rem 0;
+  padding: 0.7rem 0.9rem;
+  border: 1px solid var(--border);
+  border-left-width: 3px;
+  border-radius: 6px;
+  background: var(--surface);
+}
+
+.upload .status.ok {
+  border-left-color: var(--accent);
+}
+
+.upload .status.error {
+  border-left-color: var(--text);
+  font-weight: 600;
+}
