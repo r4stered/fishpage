@@ -3,7 +3,7 @@
 import sqlite3
 from pathlib import Path
 
-from fastapi import FastAPI, UploadFile
+from fastapi import FastAPI, Header, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -11,7 +11,7 @@ from fishpage import observability
 from fishpage.browse import SIZE_GRADES, browse
 from fishpage.ingest import ingest_pending, stocklist_date
 from fishpage.models import Item
-from fishpage.render import render_catalog, render_upload
+from fishpage.render import render_catalog, render_grid, render_upload
 from fishpage.store import all_items, latest_stocklist_date
 
 _STATIC = Path(__file__).parent / "static"
@@ -117,6 +117,7 @@ def create_app(
         on_special: bool = False,
         search: str = "",
         sort: str = "",
+        hx_request: str | None = Header(default=None),
     ) -> HTMLResponse:
         # Load the whole catalog once: the dropdown lists every category regardless of the
         # active filters, so narrowing to In stock in SQL would force a second read for the
@@ -133,6 +134,11 @@ def create_app(
             search=search,
             sort=sort,
         )
+        # One route, header-sniffed: an HTMX filter change swaps just the grid fragment in place,
+        # while a hard navigation to the same URL renders the whole page. The pushed URL and the
+        # reloadable URL are identical because both go through here.
+        if hx_request:
+            return HTMLResponse(render_grid(items))
         return HTMLResponse(
             render_catalog(
                 items,

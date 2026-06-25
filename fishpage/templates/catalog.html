@@ -3,24 +3,24 @@
 {% block body %}
   <h1>Catalog</h1>
   <p><a class="button" href="/upload">Upload a Stocklist</a></p>
-  <form class="filters" method="get" action="/">
+  <form class="filters" method="get" action="/"
+        hx-get="/" hx-target=".catalog-grid" hx-swap="outerHTML"
+        hx-push-url="true" hx-trigger="change, submit">
     <label>
       Search
       <input type="search" name="search" value="{{ search }}" placeholder="name">
     </label>
     <label>
-      <input type="checkbox" name="include_out_of_stock" value="true"
-             onchange="this.form.submit()"{% if include_out_of_stock %} checked{% endif %}>
+      <input type="checkbox" name="include_out_of_stock" value="true"{% if include_out_of_stock %} checked{% endif %}>
       Include out of stock
     </label>
     <label>
-      <input type="checkbox" name="on_special" value="true"
-             onchange="this.form.submit()"{% if on_special %} checked{% endif %}>
+      <input type="checkbox" name="on_special" value="true"{% if on_special %} checked{% endif %}>
       On special only
     </label>
     <label>
       Category
-      <select name="category" onchange="this.form.submit()">
+      <select name="category">
         <option value="">All categories</option>
         {% for category in categories %}
         <option value="{{ category }}"{% if category == selected_category %} selected{% endif %}>{{ category }}</option>
@@ -29,7 +29,7 @@
     </label>
     <label>
       Size
-      <select name="size" onchange="this.form.submit()">
+      <select name="size">
         <option value="">All sizes</option>
         {% for size in sizes %}
         <option value="{{ size }}"{% if size == selected_size %} selected{% endif %}>{{ size }}</option>
@@ -38,12 +38,13 @@
     </label>
     <label>
       Sort
-      <select name="sort" onchange="this.form.submit()">
+      <select name="sort">
         <option value=""{% if not sort %} selected{% endif %}>Default</option>
         <option value="price_asc"{% if sort == "price_asc" %} selected{% endif %}>Price: low to high</option>
         <option value="price_desc"{% if sort == "price_desc" %} selected{% endif %}>Price: high to low</option>
       </select>
     </label>
+    <button class="button" type="submit">Apply</button>
   </form>
   <p>{{ items|length }} Items</p>
   {% include "_grid.html" %}
