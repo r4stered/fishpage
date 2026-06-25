@@ -6,6 +6,7 @@ exercised with no R2 bucket and no credentials. Images are opt-in and default-of
 reaches for a real bucket.
 """
 
+import io
 from datetime import date
 from decimal import Decimal
 
@@ -141,3 +142,38 @@ def test_images_stay_off_unless_the_flag_bucket_and_endpoint_are_all_present():
 
 def test_a_fully_configured_environment_selects_an_r2_image_store():
     assert isinstance(select_image_store(load_settings(_R2_ENV)), R2ImageStore)
+
+
+class _FakeS3:
+    """A stand-in for the boto3 S3 client — the R2 contract R2ImageStore speaks, no network."""
+
+    def __init__(self):
+        self.objects: dict[tuple[str, str], tuple[bytes, str]] = {}
+
+    def put_object(self, *, Bucket, Key, Body, ContentType):
+        self.objects[(Bucket, Key)] = (Body, ContentType)
+
+    def get_object(self, *, Bucket, Key):
+        body, content_type = self.objects[(Bucket, Key)]  # KeyError on a miss
+        return {"Body": io.BytesIO(body), "ContentType": content_type}
+
+
+def test_r2_image_store_round_trips_the_bytes_and_content_type():
+    store = R2ImageStore(_FakeS3(), "fishpage-images")
+
+    store.put("110042", JPEG, content_type="image/jpeg")
+
+    # The bytes and their content type survive the put/get round-trip through the S3 API.
+    assert store.get("110042") == StoredImage(data=JPEG, content_type="image/jpeg")
+
+
+def test_r2_image_store_treats_a_read_miss_as_no_image():
+    # A missing key (or any read failure) is "no image" — the proxy route turns that into a 404.
+    assert R2ImageStore(_FakeS3(), "fishpage-images").get("absent") is None
+
+
+def test_serving_an_image_with_images_disabled_is_404(tmp_path):
+    _, client = _client(tmp_path, image_store=None)  # images opt-in, default off
+
+    # With no bucket configured there is nothing to proxy, so the route 404s rather than erroring.
+    assert client.get("/items/110042/image").status_code == 404
