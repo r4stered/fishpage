@@ -29,8 +29,9 @@ def test_a_fresh_database_is_brought_up_to_the_baseline_schema(tmp_path):
 
     version = migrate(conn)
 
-    # The baseline migration creates the v1 items table and stamps the database with its version.
-    assert version == 1
+    # The baseline migration creates the v1 items table; later migrations then carry the fresh
+    # database forward to the latest version.
+    assert version == 2
     columns = {row[1] for row in conn.execute("PRAGMA table_info(items)")}
     assert "sku" in columns and "reuse_flagged" in columns
 
@@ -40,7 +41,7 @@ def test_re_running_on_an_up_to_date_database_is_a_noop(tmp_path):
     migrate(conn)
 
     # A second boot must not re-apply or error; the version stays put.
-    assert migrate(conn) == 1
+    assert migrate(conn) == 2
 
 
 def test_a_populated_pre_runner_database_keeps_its_rows_and_is_stamped(tmp_path):
@@ -54,9 +55,9 @@ def test_a_populated_pre_runner_database_keeps_its_rows_and_is_stamped(tmp_path)
 
     version = migrate(conn)
 
-    # The baseline meets an existing table as a no-op: the row survives and the database is
-    # stamped to v1 so later migrations build on it.
-    assert version == 1
+    # The baseline meets an existing table as a no-op: the row survives while the database is
+    # carried forward to the latest version so later migrations build on it.
+    assert version == 2
     rows = conn.execute("SELECT sku, name FROM items").fetchall()
     assert rows == [("110042", "Bichir Ornate")]
 
@@ -104,3 +105,117 @@ def test_a_failing_migration_rolls_back_atomically(tmp_path):
     # The database is left cleanly at the last fully-applied version, with no debris from step 2.
     assert schema_version(conn) == 1
     assert conn.execute("SELECT name FROM sqlite_master WHERE name = 'half'").fetchone() is None
+
+
+def table_names(conn):
+    return {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
+
+
+def test_the_enrichment_schema_migration_creates_both_enrichment_tables(tmp_path):
+    conn = fresh_conn()
+
+    version = migrate(conn)
+
+    # The phase-2 Enrichment schema lands as the next migration after the v1 baseline.
+    assert version == 2
+    assert {"enrichment", "classifier_override"} <= table_names(conn)
+
+
+def enrichment_columns(conn):
+    return {row[1] for row in conn.execute("PRAGMA table_info(enrichment)")}
+
+
+def test_enrichment_holds_the_species_and_enum_care_classifiers(tmp_path):
+    conn = fresh_conn()
+
+    migrate(conn)
+
+    # The AI care block: a resolved species plus one column per enum Classifier.
+    assert {
+        "scientific_name",
+        "common_name",
+        "difficulty",
+        "temperament",
+        "plant_safe",
+    } <= enrichment_columns(conn)
+
+
+def test_enum_care_columns_reject_out_of_vocabulary_values(tmp_path):
+    conn = fresh_conn()
+    migrate(conn)
+
+    # A fabricated grade the model could never legitimately emit is refused at the DB level.
+    with pytest.raises(sqlite3.IntegrityError):
+        conn.execute("INSERT INTO enrichment (sku, difficulty) VALUES ('1', 'wizard')")
+
+
+def test_enum_care_columns_accept_a_valid_value_the_unknown_hatch_and_null(tmp_path):
+    conn = fresh_conn()
+    migrate(conn)
+
+    # In-vocabulary values, the honesty hatch, and an unset (NULL) attribute are all stored.
+    conn.execute(
+        "INSERT INTO enrichment (sku, difficulty, temperament, plant_safe) "
+        "VALUES ('1', 'beginner', 'unknown', NULL)"
+    )
+
+    row = conn.execute(
+        "SELECT difficulty, temperament, plant_safe FROM enrichment WHERE sku = '1'"
+    ).fetchone()
+    assert row == ("beginner", "unknown", None)
+
+
+def test_enrichment_holds_image_metadata_but_never_the_bytes(tmp_path):
+    conn = fresh_conn()
+
+    migrate(conn)
+
+    # Only the R2 object key plus license/attribution/source — the bytes live in the bucket.
+    assert {
+        "image_object_key",
+        "image_license",
+        "image_attribution",
+        "image_source_url",
+    } <= enrichment_columns(conn)
+
+
+def test_classifier_override_stores_one_correction_per_sku_and_key(tmp_path):
+    conn = fresh_conn()
+    migrate(conn)
+
+    conn.execute(
+        "INSERT INTO classifier_override (sku, key, value) "
+        "VALUES ('110042', 'difficulty', 'advanced')"
+    )
+
+    # A row's presence is the manual Provenance; the correction reads back verbatim.
+    row = conn.execute(
+        "SELECT sku, key, value FROM classifier_override WHERE sku = '110042'"
+    ).fetchone()
+    assert row == ("110042", "difficulty", "advanced")
+
+    # One correction per (sku, key): a second override of the same attribute collides.
+    with pytest.raises(sqlite3.IntegrityError):
+        conn.execute(
+            "INSERT INTO classifier_override (sku, key, value) "
+            "VALUES ('110042', 'difficulty', 'beginner')"
+        )
+
+
+def test_the_enrichment_migration_is_additive_on_a_populated_database(tmp_path):
+    conn = fresh_conn()
+    conn.executescript(PRE_RUNNER_SCHEMA)
+    conn.execute(
+        "INSERT INTO items (sku, size, name, retail_price, qty_avail) VALUES (?, ?, ?, ?, ?)",
+        ("110042", "M", "Bichir Ornate", "28.99", 15),
+    )
+    conn.commit()
+
+    version = migrate(conn)
+
+    # The first real migration against the live, populated database: existing Items are untouched
+    # and the new tables land empty alongside them — additive only, no data loss.
+    assert version == 2
+    assert conn.execute("SELECT sku, name FROM items").fetchall() == [("110042", "Bichir Ornate")]
+    assert conn.execute("SELECT count(*) FROM enrichment").fetchone()[0] == 0
+    assert conn.execute("SELECT count(*) FROM classifier_override").fetchone()[0] == 0

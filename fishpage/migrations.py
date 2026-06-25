@@ -31,6 +31,35 @@ MIGRATIONS: list[tuple[int, str]] = [
         );
         """,
     ),
+    (
+        2,
+        """
+        CREATE TABLE IF NOT EXISTS enrichment (
+            sku             TEXT PRIMARY KEY,
+            scientific_name TEXT,
+            common_name     TEXT,
+            difficulty      TEXT CHECK (
+                difficulty IN ('beginner', 'intermediate', 'advanced', 'unknown')
+            ),
+            temperament     TEXT CHECK (
+                temperament IN ('peaceful', 'semi_aggressive', 'aggressive', 'unknown')
+            ),
+            plant_safe      TEXT CHECK (
+                plant_safe IN ('safe', 'unsafe', 'unknown')
+            ),
+            image_object_key  TEXT,
+            image_license     TEXT,
+            image_attribution TEXT,
+            image_source_url  TEXT
+        );
+        CREATE TABLE IF NOT EXISTS classifier_override (
+            sku   TEXT NOT NULL,
+            key   TEXT NOT NULL,
+            value TEXT NOT NULL,
+            PRIMARY KEY (sku, key)
+        );
+        """,
+    ),
 ]
 
 
