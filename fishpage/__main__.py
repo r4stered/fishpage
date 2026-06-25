@@ -112,6 +112,9 @@ def listening_socket(host: str, port: int) -> socket.socket:
 
 def main():
     settings = load_settings(os.environ)
+    # Raise the fishpage logger to INFO and JSON-format the console before anything logs, so the
+    # startup narrative surfaces locally and is shaped for the OTLP handler configure() may attach.
+    observability.configure_logging(settings)
     # Configure telemetry before building the app so the providers and the catalog-freshness
     # gauge are installed when the app and its connection register against them.
     observability.configure(settings)
