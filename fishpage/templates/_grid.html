@@ -20,10 +20,10 @@
     {% if card.classifiers %}
     <ul class="badges">
       {% for c in card.classifiers %}
-      <li class="badge provenance-{{ c.provenance.value }}" data-classifier="{{ c.key }}" title="{{ c.label }} — {{ 'human-corrected' if c.provenance.value == 'manual' else 'AI-generated, best-effort' }}">
+      <li class="badge provenance-{{ c.provenance.value }}" data-classifier="{{ c.key }}" title="{{ c.label }}: {{ c.value.replace('_', ' ') }} — {{ 'human-corrected' if c.provenance.value == 'manual' else 'AI-generated, best-effort' }}">
         <span class="badge-label">{{ c.label }}</span>
-        <span class="badge-value">{{ c.value }}</span>
-        <span class="provenance-marker">{{ 'manual' if c.provenance.value == 'manual' else 'ai-generated' }}</span>
+        <span class="badge-value">{{ c.value.replace('_', ' ') }}</span>
+        <span class="provenance-marker">{{ 'edited' if c.provenance.value == 'manual' else 'AI' }}</span>
       </li>
       {% endfor %}
     </ul>
@@ -43,7 +43,7 @@
         <label>{{ spec.label }}
           <select name="value">
             {% for choice in spec.choices %}
-            <option value="{{ choice }}"{% if choice == current %} selected{% endif %}>{{ choice }}</option>
+            <option value="{{ choice }}"{% if choice == current %} selected{% endif %}>{{ choice.replace('_', ' ') }}</option>
             {% endfor %}
           </select>
         </label>

@@ -50,7 +50,7 @@
       {% for choice in spec.choices %}
       <label class="chip">
         <input type="checkbox" name="{{ spec.key }}" value="{{ choice }}"{% if choice in selected_classifiers.get(spec.key, []) %} checked{% endif %}>
-        {{ choice }}
+        {{ choice.replace('_', ' ') }}
       </label>
       {% endfor %}
     </fieldset>
