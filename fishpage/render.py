@@ -12,6 +12,12 @@ _env = Environment(
 )
 
 
+def render_grid(items: list[Item]) -> str:
+    """Render just the grid of Item cards, the fragment shared by the full catalog page and the
+    HTMX swap. The page includes the same partial, so both paths emit identical card markup."""
+    return _env.get_template("_grid.html").render(items=items)
+
+
 def render_catalog(
     items: list[Item],
     *,
