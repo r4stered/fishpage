@@ -74,9 +74,21 @@ human fact versus a best-effort AI guess. `manual` is authoritative: re-running 
 overwrites a `manual` value, the way an Item's SKU is never deleted.
 _Avoid_: confidence, score (Provenance is the source of a value, not a numeric certainty about it)
 
+**Actor**:
+The Cloudflare Access identity behind a mutating request — the authenticated email Access injects on
+every request that reaches the origin, recorded as the *who* on each audit event (a Classifier
+correction, a re-enrichment, a Stocklist upload). The app owns no login or session of its own; Access
+is the sole authority on who a request is, and the identity is trusted without verifying its JWT
+because no route reaches the origin except through Access. An off-edge run (local, tests) has no real
+Actor and falls back to a neutral placeholder.
+_Avoid_: user, session, login (the app owns none of these — the identity is request-scoped and
+external); confusing with the *login* event itself, which happens at the Access edge and is audited
+by Cloudflare, not by the app.
+
 **Uploader**:
-The authenticated person credited with a `manual` image — the Cloudflare Access identity of whoever
-attached it. Records *which* human stands behind a `manual` Provenance, where Provenance alone says
-only *that* a human did. Absent on non-`manual` images, which have no human uploader.
+The Actor credited with a `manual` image — the special case where the identity is durably stored on
+the image row, not just emitted to a log. Records *which* human stands behind a `manual` Provenance,
+where Provenance alone says only *that* a human did. Absent on non-`manual` images, which have no
+human uploader.
 _Avoid_: confusing with `attribution` (the external photographer credited on a `wikimedia` image — a
 different "who"); author, owner.

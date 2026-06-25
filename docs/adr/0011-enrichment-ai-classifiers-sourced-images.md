@@ -129,3 +129,18 @@ row-absent un-enriched queue, and `enrichment_for` are otherwise untouched. The 
 when the spike ships, writes the same table with `provenance = 'wikimedia'` and *is* re-enrichable;
 the manual upload writes `provenance = 'manual'` and is structurally safe — the image columns and the
 two-table Provenance split are now uniform across Classifiers and images.
+
+## Amendment (2026-06-25): enrichment cost is observed as tokens, dollars derived downstream
+
+The "can fail, rate-limit, and cost money" consequence above is now instrumented, following the
+[ADR 0009](0009-opentelemetry-grafana-cloud-stale-catalog-alert.md) pattern: per-Item result logs,
+counters for call outcome, token spend, and the honesty-gap rate (how often a call returns a `null`
+species or an `unknown` Classifier — the quality signal that catches enrichment silently degrading),
+and an observable gauge for the un-enriched queue depth.
+
+The one choice worth recording is how **cost** is observed: as **token counts tagged by model, never a
+dollar figure in the app**. A per-model price table is exactly the kind of fact that goes stale, and
+this repo keeps rotting facts out of code. Tokens are the durable primitive; dollars are computed in
+Grafana from the token counters with a price variable, so a reprice edits a dashboard, not the app.
+The `model` tag is stamped even though only the Sonnet default is wired today, so the spend split is
+already in place if the Haiku cost fallback this ADR describes is ever implemented.
