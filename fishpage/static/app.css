@@ -223,20 +223,53 @@ a {
   color: var(--text);
 }
 
-/* The manual image upload, tucked under the card body and kept visually quiet. */
+/* The manual image upload reads as a quiet footer: pinned to the card's bottom with margin-top:auto
+   so it lines up across a row even when a special-price badge makes one card taller, and stacked
+   above a divider so the file picker and submit don't wrap into a disjointed cluster. */
 .card .image-upload {
   display: flex;
-  flex-wrap: wrap;
-  gap: 0.35rem;
-  margin-top: 0.35rem;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin-top: auto;
+  padding-top: 0.6rem;
+  border-top: 1px solid var(--border);
   font-size: 0.75rem;
 }
 
 .card .image-upload input[type="file"] {
+  width: 100%;
   min-width: 0;
-  flex: 1;
+  font: inherit;
   font-size: 0.75rem;
   color: var(--muted);
+}
+
+.card .image-upload button {
+  align-self: flex-start;
+}
+
+/* Match both the native file-picker button and the submit to the app's quiet, outlined control,
+   so the upload sits with the card instead of looking like a default OS button. */
+.card .image-upload input[type="file"]::file-selector-button,
+.card .image-upload button {
+  padding: 0.3rem 0.6rem;
+  font: inherit;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.card .image-upload input[type="file"]::file-selector-button {
+  margin-right: 0.5rem;
+}
+
+.card .image-upload input[type="file"]::file-selector-button:hover,
+.card .image-upload button:hover {
+  border-color: var(--accent);
 }
 
 /* Upload page: a focused, narrower column with the form boxed like the catalog's filter bar. */
