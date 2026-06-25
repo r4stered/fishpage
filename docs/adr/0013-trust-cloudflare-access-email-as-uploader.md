@@ -44,3 +44,19 @@ error, and a local run has no real human to credit anyway.
   column, not merely a deployment detail.
 - Moving to JWT verification later is additive — the recording seam is the same — but it does not
   recover the provenance of rows already written.
+
+## Amendment (2026-06-25): the trusted email is the Actor on every mutating audit event
+
+The original decision scoped the trusted Access email to the image upload alone. It now identifies the
+**Actor** on every mutating action the app serves — a Classifier override, an on-demand re-enrich,
+and a Stocklist upload — each emitting a structured audit event with the same `uploader_from_header`
+identity under a uniform `actor` log field (so "everything this person did" is one query). The
+**Uploader** stays the narrower case: the only Actor also stored durably, on the image row.
+
+Two consequences of the original decision widen with it. The integrity caveat — that an Actor recorded
+under header-trust is only as trustworthy as the origin staying private — now covers the whole audit
+trail, not just the Uploader column; if a public `[[services]]` block is ever added to `fly.toml`,
+every recorded Actor becomes retroactively suspect. And browsing reads are deliberately **not**
+attributed: per-request actor logging on GETs is high-volume and duplicates what Cloudflare Access's
+own edge audit logs already capture better. The app records the Actor where it uniquely can — on the
+mutations it performs — and leaves login/session auditing to the edge.
