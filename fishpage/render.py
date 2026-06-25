@@ -4,7 +4,7 @@ from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
-from fishpage.models import Item
+from fishpage.catalog import CLASSIFIERS, Card
 
 _env = Environment(
     loader=FileSystemLoader(Path(__file__).parent / "templates"),
@@ -12,25 +12,21 @@ _env = Environment(
 )
 
 
-def render_grid(
-    items: list[Item],
-    image_skus: set[str] | None = None,
-    *,
-    images_enabled: bool = False,
-) -> str:
+def render_grid(cards: list[Card], *, images_enabled: bool = False) -> str:
     """Render just the grid of Item cards, the fragment shared by the full catalog page and the
     HTMX swap. The page includes the same partial, so both paths emit identical card markup.
 
-    ``image_skus`` is the set of SKUs with a stored image; a card in it points at the proxy route,
-    the rest fall back to the placeholder. ``images_enabled`` adds the per-card manual upload form
-    only when an image bucket is configured to receive it."""
+    Each :class:`Card` carries its Item, resolved Classifiers, and image record (or ``None``), so a
+    card renders correctly un-enriched, enriched, or manually-overridden from one template.
+    ``images_enabled`` adds the per-card manual upload form only when an image bucket is configured
+    to receive it."""
     return _env.get_template("_grid.html").render(
-        items=items, image_skus=image_skus or set(), images_enabled=images_enabled
+        cards=cards, classifiers=CLASSIFIERS, images_enabled=images_enabled
     )
 
 
 def render_catalog(
-    items: list[Item],
+    cards: list[Card],
     *,
     include_out_of_stock: bool = False,
     categories: list[str] | None = None,
@@ -40,11 +36,12 @@ def render_catalog(
     on_special: bool = False,
     search: str = "",
     sort: str = "",
-    image_skus: set[str] | None = None,
+    selected_classifiers: dict[str, set[str]] | None = None,
     images_enabled: bool = False,
 ) -> str:
     return _env.get_template("catalog.html").render(
-        items=items,
+        cards=cards,
+        classifiers=CLASSIFIERS,
         include_out_of_stock=include_out_of_stock,
         categories=categories or [],
         selected_category=selected_category,
@@ -53,7 +50,7 @@ def render_catalog(
         on_special=on_special,
         search=search,
         sort=sort,
-        image_skus=image_skus or set(),
+        selected_classifiers=selected_classifiers or {},
         images_enabled=images_enabled,
     )
 

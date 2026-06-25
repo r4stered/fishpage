@@ -7,6 +7,7 @@ from fishpage.app import create_app
 from fishpage.enricher import Difficulty, EnrichmentResult, PlantSafe, Temperament
 from fishpage.models import Item
 from fishpage.store import (
+    classifier_overrides_for,
     enrichment_for,
     open_store,
     persist_enrichment,
@@ -282,10 +283,10 @@ def test_index_category_dropdown_filters_on_change(tmp_path):
 
 
 def test_index_category_and_stock_controls_share_one_form(tmp_path):
-    # Both controls live in a single form, so changing one preserves the other's state.
+    # Both controls live in a single filter form, so changing one preserves the other's state.
     html = categorized_client(tmp_path).get("/").text
 
-    assert html.count("<form") == 1
+    assert html.count('class="filters"') == 1
     assert 'name="include_out_of_stock"' in html
     assert 'name="category"' in html
 
@@ -415,10 +416,10 @@ def test_index_sort_dropdown_reflects_selected_order(tmp_path):
 
 
 def test_index_all_browse_controls_share_one_form(tmp_path):
-    # Every control lives in a single form, so changing one preserves the others' state.
+    # Every control lives in a single filter form, so changing one preserves the others' state.
     html = combo_client(tmp_path).get("/").text
 
-    assert html.count("<form") == 1
+    assert html.count('class="filters"') == 1
     for control in (
         'name="search"',
         'name="include_out_of_stock"',
@@ -466,3 +467,127 @@ def test_index_dropdown_lists_categories_independent_of_stock_filter(tmp_path):
 
     assert '<option value="Eel"' in html  # offered despite having no in-stock Item
     assert 'data-sku="150013"' not in html  # but its card stays hidden until toggled
+
+
+def test_classifier_override_route_records_a_manual_correction(tmp_path):
+    conn = open_store(tmp_path / "fishpage.db")
+    reconcile(conn, [ORNATE_M], JUN19)
+    app_client = TestClient(create_app(conn))
+
+    resp = app_client.post(
+        "/items/110042/classifier",
+        data={"key": "difficulty", "value": "beginner"},
+        follow_redirects=False,
+    )
+
+    # A human correction is written as a manual override that wins on read, then the form lands back
+    # on the refreshed catalog via post/redirect/get so a reload does not re-submit.
+    assert resp.status_code == 303
+    assert resp.headers["location"] == "/"
+    assert classifier_overrides_for(conn, "110042") == {"difficulty": "beginner"}
+
+
+def test_classifier_override_shows_on_the_card_as_manual(tmp_path):
+    conn = open_store(tmp_path / "fishpage.db")
+    reconcile(conn, [ORNATE_M], JUN19)
+    app_client = TestClient(create_app(conn))
+    app_client.post("/items/110042/classifier", data={"key": "difficulty", "value": "beginner"})
+
+    html = app_client.get("/").text
+
+    # The correction is now a manual badge on the card — the round-trip a buyer actually sees.
+    assert 'class="badge provenance-manual"' in html
+    assert ">beginner<" in html
+
+
+def test_classifier_override_route_404s_an_unknown_sku(tmp_path):
+    resp = client(tmp_path).post(
+        "/items/999999/classifier", data={"key": "difficulty", "value": "beginner"}
+    )
+
+    # Correcting presupposes a real Item; an unknown SKU is a 404, not a silent write.
+    assert resp.status_code == 404
+
+
+def test_classifier_override_route_400s_a_value_outside_the_vocabulary(tmp_path):
+    conn = open_store(tmp_path / "fishpage.db")
+    reconcile(conn, [ORNATE_M], JUN19)
+    app_client = TestClient(create_app(conn))
+
+    resp = app_client.post(
+        "/items/110042/classifier", data={"key": "difficulty", "value": "trivial"}
+    )
+
+    # An out-of-vocabulary value is rejected at the door, never persisted — the catalog can only
+    # ever hold curated Classifier values.
+    assert resp.status_code == 400
+    assert classifier_overrides_for(conn, "110042") == {}
+
+
+def _enriched_client(tmp_path):
+    """A catalog where the two oddballs carry contrasting care reads, for the Classifier facets."""
+    conn = open_store(tmp_path / "fishpage.db")
+    reconcile(conn, [ORNATE_M, LEAF], JUN19)
+    persist_enrichment(
+        conn,
+        "110042",
+        EnrichmentResult(None, None, Difficulty.BEGINNER, Temperament.PEACEFUL, PlantSafe.SAFE),
+    )
+    persist_enrichment(
+        conn,
+        "110092",
+        EnrichmentResult(None, None, Difficulty.ADVANCED, Temperament.AGGRESSIVE, PlantSafe.UNSAFE),
+    )
+    return conn, TestClient(create_app(conn))
+
+
+def test_catalog_filters_by_a_classifier_facet(tmp_path):
+    _conn, app_client = _enriched_client(tmp_path)
+
+    resp = app_client.get("/catalog", params={"difficulty": "beginner"})
+
+    # Only the beginner Item survives the Classifier facet; the advanced one drops out.
+    assert {i["sku"] for i in resp.json()} == {"110042"}
+
+
+def test_catalog_classifier_facet_respects_a_manual_override(tmp_path):
+    _conn, app_client = _enriched_client(tmp_path)
+    # A human corrects the advanced Item down to beginner.
+    app_client.post("/items/110092/classifier", data={"key": "difficulty", "value": "beginner"})
+
+    resp = app_client.get("/catalog", params={"difficulty": "beginner"})
+
+    # The override is what the facet matches now: both Items read beginner on resolve.
+    assert {i["sku"] for i in resp.json()} == {"110042", "110092"}
+
+
+def test_index_filters_grid_by_a_classifier_facet(tmp_path):
+    _conn, app_client = _enriched_client(tmp_path)
+
+    html = app_client.get("/", params={"temperament": "aggressive"}).text
+
+    assert 'data-sku="110092"' in html  # the aggressive oddball
+    assert 'data-sku="110042"' not in html  # the peaceful one excluded
+
+
+def test_index_renders_classifier_filter_chips_marking_the_active_one(tmp_path):
+    _conn, app_client = _enriched_client(tmp_path)
+
+    html = app_client.get("/", params={"difficulty": "beginner"}).text
+
+    # Each enum Classifier value is a chip in the filter form, bound to its query param; the active
+    # value is marked so the buyer sees the live facet. A chip toggles via the same change-triggered
+    # form as the other controls.
+    assert 'name="difficulty" value="beginner"' in html
+    assert 'name="temperament" value="peaceful"' in html
+    assert 'name="plant_safe" value="safe"' in html
+    # The active chip is checked; an inactive one is not.
+    active = html[
+        html.index('name="difficulty" value="beginner"') - 60 : html.index(
+            'name="difficulty" value="beginner"'
+        )
+        + 60
+    ]
+    assert "checked" in active
+    # No chip ever offers the unknown hatch.
+    assert 'value="unknown"' not in html

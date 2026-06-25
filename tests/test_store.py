@@ -2,12 +2,18 @@ from dataclasses import replace
 from datetime import date
 from decimal import Decimal
 
+import pytest
+
 from fishpage.enricher import Difficulty, EnrichmentResult, PlantSafe, Temperament
 from fishpage.migrations import MIGRATIONS, schema_version
 from fishpage.models import ImageRecord, Item, Provenance
 from fishpage.store import (
+    all_classifier_overrides,
+    all_enrichments,
+    all_images,
     all_items,
     attach_image,
+    classifier_overrides_for,
     clear_enrichment,
     enrichment_for,
     image_for,
@@ -15,6 +21,7 @@ from fishpage.store import (
     open_store,
     persist_enrichment,
     reconcile,
+    set_classifier_override,
     unenriched_items,
 )
 
@@ -217,3 +224,85 @@ def test_persisting_enrichment_leaves_a_manual_override_intact(tmp_path):
     assert override["value"] == "peaceful"
     reenriched = enrichment_for(conn, "110042")
     assert reenriched is not None and reenriched.temperament is Temperament.AGGRESSIVE
+
+
+def test_a_manual_classifier_override_round_trips(tmp_path):
+    conn = open_store(tmp_path / "fishpage.db")
+    reconcile(conn, [ORNATE_M], JUN19)
+
+    set_classifier_override(conn, "110042", "difficulty", "beginner")
+
+    # The correction is read back keyed by Classifier; its presence in this table *is* manual
+    # Provenance — the resolve-on-read layer needs nothing more to mark it a human fact.
+    assert classifier_overrides_for(conn, "110042") == {"difficulty": "beginner"}
+
+
+def test_overriding_the_same_classifier_again_replaces_the_value(tmp_path):
+    conn = open_store(tmp_path / "fishpage.db")
+    reconcile(conn, [ORNATE_M], JUN19)
+
+    set_classifier_override(conn, "110042", "difficulty", "beginner")
+    set_classifier_override(conn, "110042", "difficulty", "advanced")
+
+    # A second correction supersedes the first rather than accumulating rows — one human value per
+    # Classifier per SKU, the table's (sku, key) primary key.
+    assert classifier_overrides_for(conn, "110042") == {"difficulty": "advanced"}
+
+
+def test_an_override_outside_the_vocabulary_is_rejected(tmp_path):
+    conn = open_store(tmp_path / "fishpage.db")
+    reconcile(conn, [ORNATE_M], JUN19)
+
+    # A value with no enum member, or an unknown Classifier key, can never reach the catalog — the
+    # store refuses it, the same out-of-vocabulary-is-impossible guarantee the AI path has.
+    with pytest.raises(ValueError):
+        set_classifier_override(conn, "110042", "difficulty", "trivial")
+    with pytest.raises(ValueError):
+        set_classifier_override(conn, "110042", "color", "blue")
+    assert classifier_overrides_for(conn, "110042") == {}
+
+
+def test_all_enrichments_reads_every_persisted_ai_row_keyed_by_sku(tmp_path):
+    conn = open_store(tmp_path / "fishpage.db")
+    reconcile(conn, [ORNATE_M, LEAF], JUN19)
+    persist_enrichment(conn, "110042", ORNATE_ENRICHMENT)
+
+    # The grid resolves Classifiers for every visible card at once, so the store hands back all AI
+    # rows in one read keyed by SKU — an un-enriched SKU is simply absent, not a None entry.
+    enrichments = all_enrichments(conn)
+    assert enrichments == {"110042": ORNATE_ENRICHMENT}
+
+
+def test_all_images_reads_every_image_record_keyed_by_sku(tmp_path):
+    conn = open_store(tmp_path / "fishpage.db")
+    reconcile(conn, [ORNATE_M, LEAF], JUN19)
+    attach_image(
+        conn,
+        "110042",
+        object_key="img/110042.webp",
+        attribution="A. Photographer",
+        provenance=Provenance.WIKIMEDIA,
+    )
+
+    # One batch read gives the grid each card's image metadata — the key it proxies and the
+    # attribution it must credit — without a per-card query.
+    images = all_images(conn)
+    assert set(images) == {"110042"}
+    assert images["110042"].attribution == "A. Photographer"
+    assert images["110042"].provenance is Provenance.WIKIMEDIA
+
+
+def test_all_classifier_overrides_groups_corrections_by_sku(tmp_path):
+    conn = open_store(tmp_path / "fishpage.db")
+    reconcile(conn, [ORNATE_M, LEAF], JUN19)
+    set_classifier_override(conn, "110042", "difficulty", "beginner")
+    set_classifier_override(conn, "110042", "temperament", "peaceful")
+    set_classifier_override(conn, "110092", "plant_safe", "unsafe")
+
+    # The grid resolves manual Provenance for every card at once, so corrections come back grouped
+    # by SKU — each SKU's inner dict is exactly what resolve_classifiers takes.
+    overrides = all_classifier_overrides(conn)
+    assert overrides == {
+        "110042": {"difficulty": "beginner", "temperament": "peaceful"},
+        "110092": {"plant_safe": "unsafe"},
+    }
