@@ -1,0 +1,41 @@
+sku,name,category,resolved_species,resolution_confidence,kind,notes
+480112,Tetra Cardinal,Tetra,Paracheirodon axelrodi,high,wild-type,Common aquarium-trade species
+240282,Cory Sterbai,Cory,Corydoras sterbai,high,wild-type,Common
+170132,Barb Tiger,Barb,Puntigrus tetrazona,high,wild-type,Common; recently reclassified from Puntius
+180142,White Cloud,Danio,Tanichthys albonubes,high,wild-type,Common
+190032,Rasbora Clown,Rasbora,Rasbora kalochroma,high,wild-type,Common
+320072,Gourami Honey Dwarf,Gourami,Trichogaster chuna,high,wild-type,Synonym Colisa chuna
+220562,Cichlid Uaru,Cichlid,Uaru amphiacanthoides,high,wild-type,Common large cichlid
+210252,Cichlid Jewel,Cichlid,Hemichromis bimaculatus,medium,wild-type,Trade Jewel covers several Hemichromis spp
+130043,Discus Blue Turquoise,Discus,Symphysodon aequifasciatus,high,line-bred,Line-bred colour strain of a wild species
+450013,Arowana Silver,Monster/Oddball,Osteoglossum bicirrhosum,high,wild-type,Large oddball
+110162,Tigerfish Goliath,Monster/Oddball,Hydrocynus goliath,high,wild-type,Oddball; rare in trade
+440082,Puffer Miurus,Puffer,Pao miurus,high,wild-type,Formerly Tetraodon miurus
+280072,Shrimp Blue Velvet,Shrimp,Neocaridina davidi,high,line-bred,Selectively bred colour morph
+290052,Snail Japanese Trapdoor,Snail,Cipangopaludina japonica,medium,wild-type,Trade name maps to several Cipangopaludina spp
+260013,African Dwarf Frog,Frog,Hymenochirus boettgeri,medium,wild-type,Trade ADF is Hymenochirus boettgeri or curtipes
+460012,Apistogramma Agassizi,Apistogramma,Apistogramma agassizii,high,wild-type,Common dwarf cichlid
+240032,Cory Adolfoi,Cory,Corydoras adolfoi,high,wild-type,Common
+430113,Rainbowfish Red Irian,Rainbowfish,Glossolepis incisus,high,wild-type,Common
+320022,Gourami Chocolate,Gourami,Sphaerichthys osphromenoides,high,wild-type,Common
+140022,Badis Scarlet Gem,Monster/Oddball,Dario dario,high,wild-type,Common nano oddball
+480022,Tetra Black Phantom,Tetra,Hyphessobrycon megalopterus,high,wild-type,Common
+250032,Shark Rainbow,Shark,Epalzeorhynchos frenatum,high,wild-type,Common
+110022,Baby Whale Fish,Monster/Oddball,Pollimyrus isidori,low,wild-type,Trade Baby/Dwarf Whale is an ambiguous mormyrid
+140152,Mudskipper Indian,Monster/Oddball,Periophthalmus novemradiatus,medium,wild-type,Oddball; trade ID imprecise
+160052,Goby Lipstick,Goby,Sicyopus zosterophorum,low,wild-type,Trade Lipstick Goby is ambiguous
+350112,Ricefish Snow White,Killifish,Oryzias latipes,low,line-bred,Snow White is a leucistic strain; base species uncertain
+340272,Guppy Tequila Sunrise: Pair,Guppy,Poecilia reticulata,high,line-bred,Fancy guppy colour strain
+120122,Angelfish Gold Marble,Angelfish,Pterophyllum scalare,high,line-bred,Domestic angel colour strain
+410252,Platy Red Mickey Mouse,Platy,Xiphophorus maculatus,high,line-bred,Domestic platy strain
+470142,Swordtail Red Lyretail Hi Fin,Swordtail,Xiphophorus hellerii,high,line-bred,Domestic swordtail fin/colour strain
+200052,Betta Half Moon Male,Betta,Betta splendens,high,line-bred,Domestic betta finnage strain
+310192,Goldfish Pearlscale,Goldfish,Carassius auratus,high,line-bred,Fancy goldfish body strain
+370023,Koi Assorted Sho,Koi,Cyprinus rubrofuscus,high,line-bred,Sho = Sanke/Showa koi colour pattern
+330132,Molly Dalmation Sailfin,Molly,Poecilia latipinna,medium,line-bred,Sailfin molly strain; possibly hybrid velifera
+300132,GloFish Tetra Green,GloFish,Gymnocorymbus ternetzi,high,line-bred,Patented GM fluorescent strain; trademark
+420062,Pleco L-018 Gold Nugget,Pleco,Baryancistrus xanthellus,medium,wild-type,L-number; recently described species
+420411,Pleco L-191 Royal,Pleco,Panaque cf. nigrolineatus,low,wild-type,L-number; undescribed/uncertain species
+758162,Four Leaf Clover,Plant,Marsilea hirsuta,medium,wild-type,Aquatic fern; trade name ambiguous across Marsilea spp
+752074,Red Flame,Plant,Echinodorus 'Red Flame',low,line-bred,Cultivar trade name; not a clean species
+480432,Pencilfish Ruby Red,Tetra,Nannostomus mortenthaleri,medium,wild-type,Coral red pencilfish

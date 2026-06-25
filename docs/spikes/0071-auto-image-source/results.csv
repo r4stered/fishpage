@@ -1,0 +1,41 @@
+sku,name,resolved_species,resolution_confidence,kind,wiki_usable,wiki_licensable,wiki_licence,inat_usable,inat_licensable,inat_default_licence,inat_n_photos,gbif_usable,gbif_licensable,gbif_n_images
+480112,Tetra Cardinal,Paracheirodon axelrodi,high,wild-type,True,True,commercial-free,True,True,unknown,8,True,True,19
+240282,Cory Sterbai,Corydoras sterbai,high,wild-type,True,True,commercial-free,True,True,commercial-free,9,True,False,8
+170132,Barb Tiger,Puntigrus tetrazona,high,wild-type,True,True,commercial-free,True,True,noncommercial-free,5,True,True,33
+180142,White Cloud,Tanichthys albonubes,high,wild-type,True,True,commercial-free,True,True,commercial-free,12,True,True,51
+190032,Rasbora Clown,Rasbora kalochroma,high,wild-type,True,True,commercial-free,True,True,noncommercial-free,7,True,True,26
+320072,Gourami Honey Dwarf,Trichogaster chuna,high,wild-type,True,True,commercial-free,True,True,commercial-free,6,True,True,9
+220562,Cichlid Uaru,Uaru amphiacanthoides,high,wild-type,True,True,commercial-free,True,True,commercial-free,10,True,True,31
+210252,Cichlid Jewel,Hemichromis bimaculatus,medium,wild-type,True,True,commercial-free,True,True,noncommercial-free,8,True,True,20
+130043,Discus Blue Turquoise,Symphysodon aequifasciatus,high,line-bred,True,True,commercial-free,True,True,noncommercial-free,11,True,True,35
+450013,Arowana Silver,Osteoglossum bicirrhosum,high,wild-type,True,True,commercial-free,True,True,commercial-free,11,True,True,34
+110162,Tigerfish Goliath,Hydrocynus goliath,high,wild-type,True,True,commercial-free,True,True,noncommercial-free,11,True,True,30
+440082,Puffer Miurus,Pao miurus,high,wild-type,True,True,commercial-free,False,False,,0,True,True,41
+280072,Shrimp Blue Velvet,Neocaridina davidi,high,line-bred,True,True,commercial-free,True,True,noncommercial-free,12,True,True,33
+290052,Snail Japanese Trapdoor,Cipangopaludina japonica,medium,wild-type,True,True,commercial-free,True,True,unknown,3,True,True,36
+260013,African Dwarf Frog,Hymenochirus boettgeri,medium,wild-type,True,True,commercial-free,True,True,commercial-free,7,True,True,59
+460012,Apistogramma Agassizi,Apistogramma agassizii,high,wild-type,True,True,commercial-free,True,True,commercial-free,9,True,True,15
+240032,Cory Adolfoi,Corydoras adolfoi,high,wild-type,True,True,commercial-free,True,True,commercial-free,5,True,False,1
+430113,Rainbowfish Red Irian,Glossolepis incisus,high,wild-type,True,True,commercial-free,True,True,commercial-free,10,True,True,2
+320022,Gourami Chocolate,Sphaerichthys osphromenoides,high,wild-type,True,True,commercial-free,True,True,noncommercial-free,11,True,True,45
+140022,Badis Scarlet Gem,Dario dario,high,wild-type,True,True,commercial-free,True,True,commercial-free,5,True,True,3
+480022,Tetra Black Phantom,Hyphessobrycon megalopterus,high,wild-type,True,True,commercial-free,True,True,noncommercial-free,6,True,True,10
+250032,Shark Rainbow,Epalzeorhynchos frenatum,high,wild-type,True,True,commercial-free,True,True,commercial-free,10,True,True,22
+110022,Baby Whale Fish,Pollimyrus isidori,low,wild-type,True,True,commercial-free,True,True,unknown,4,True,True,24
+140152,Mudskipper Indian,Periophthalmus novemradiatus,medium,wild-type,True,True,commercial-free,True,True,unknown,5,True,True,24
+160052,Goby Lipstick,Sicyopus zosterophorum,low,wild-type,True,True,commercial-free,True,True,unknown,4,True,True,41
+350112,Ricefish Snow White,Oryzias latipes,low,line-bred,True,True,commercial-free,True,True,commercial-free,6,True,True,30
+340272,Guppy Tequila Sunrise: Pair,Poecilia reticulata,high,line-bred,True,True,commercial-free,True,True,unknown,12,True,True,35
+120122,Angelfish Gold Marble,Pterophyllum scalare,high,line-bred,True,True,commercial-free,True,True,commercial-free,6,True,True,24
+410252,Platy Red Mickey Mouse,Xiphophorus maculatus,high,line-bred,True,True,commercial-free,True,True,noncommercial-free,11,True,True,27
+470142,Swordtail Red Lyretail Hi Fin,Xiphophorus hellerii,high,line-bred,True,True,commercial-free,True,True,noncommercial-free,8,True,True,35
+200052,Betta Half Moon Male,Betta splendens,high,line-bred,True,True,commercial-free,True,True,unknown,6,True,True,31
+310192,Goldfish Pearlscale,Carassius auratus,high,line-bred,True,True,commercial-free,True,True,unknown,11,True,True,25
+370023,Koi Assorted Sho,Cyprinus rubrofuscus,high,line-bred,True,True,commercial-free,True,True,unknown,12,True,True,39
+330132,Molly Dalmation Sailfin,Poecilia latipinna,medium,line-bred,True,True,commercial-free,True,True,noncommercial-free,12,True,True,43
+300132,GloFish Tetra Green,Gymnocorymbus ternetzi,high,line-bred,True,True,commercial-free,True,True,noncommercial-free,5,True,True,22
+420062,Pleco L-018 Gold Nugget,Baryancistrus xanthellus,medium,wild-type,True,True,commercial-free,True,True,commercial-free,3,True,True,2
+420411,Pleco L-191 Royal,Panaque cf. nigrolineatus,low,wild-type,True,True,commercial-free,False,False,,0,True,True,30
+758162,Four Leaf Clover,Marsilea hirsuta,medium,wild-type,True,True,commercial-free,True,True,commercial-free,4,True,True,81
+752074,Red Flame,Echinodorus 'Red Flame',low,line-bred,False,False,,False,False,,0,False,False,0
+480432,Pencilfish Ruby Red,Nannostomus mortenthaleri,medium,wild-type,True,True,commercial-free,True,True,commercial-free,1,True,True,2

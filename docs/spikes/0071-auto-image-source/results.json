@@ -1,0 +1,1630 @@
+[
+  {
+    "sku": "480112",
+    "name": "Tetra Cardinal",
+    "category": "Tetra",
+    "resolved_species": "Paracheirodon axelrodi",
+    "resolution_confidence": "high",
+    "kind": "wild-type",
+    "notes": "Common aquarium-trade species",
+    "gbif": {
+      "matched": true,
+      "match_type": "EXACT",
+      "usable": true,
+      "licensable": true,
+      "n_images": 19,
+      "total_with_media": 18,
+      "licences": {
+        "noncommercial-free": 5,
+        "commercial-free": 7,
+        "not-licensable": 7
+      }
+    },
+    "inat": {
+      "matched": true,
+      "matched_name": "Paracheirodon axelrodi",
+      "usable": true,
+      "licensable": true,
+      "n_photos": 8,
+      "default_photo_licence": "unknown",
+      "licences": {
+        "unknown": 2,
+        "noncommercial-free": 5,
+        "commercial-free": 1
+      }
+    },
+    "wikimedia": {
+      "matched": true,
+      "title": "Cardinal tetra",
+      "usable": true,
+      "licence_raw": "CC BY-SA 3.0",
+      "licence_bucket": "commercial-free",
+      "licensable": true
+    }
+  },
+  {
+    "sku": "240282",
+    "name": "Cory Sterbai",
+    "category": "Cory",
+    "resolved_species": "Corydoras sterbai",
+    "resolution_confidence": "high",
+    "kind": "wild-type",
+    "notes": "Common",
+    "gbif": {
+      "matched": true,
+      "match_type": "EXACT",
+      "usable": true,
+      "licensable": false,
+      "n_images": 8,
+      "total_with_media": 2,
+      "licences": {
+        "not-licensable": 8
+      }
+    },
+    "inat": {
+      "matched": false,
+      "matched_name": "Hoplisoma sterbai",
+      "usable": true,
+      "licensable": true,
+      "n_photos": 9,
+      "default_photo_licence": "commercial-free",
+      "licences": {
+        "commercial-free": 4,
+        "noncommercial-free": 4,
+        "unknown": 1
+      }
+    },
+    "wikimedia": {
+      "matched": true,
+      "title": "Sterba's corydoras",
+      "usable": true,
+      "licence_raw": "Public domain",
+      "licence_bucket": "commercial-free",
+      "licensable": true
+    }
+  },
+  {
+    "sku": "170132",
+    "name": "Barb Tiger",
+    "category": "Barb",
+    "resolved_species": "Puntigrus tetrazona",
+    "resolution_confidence": "high",
+    "kind": "wild-type",
+    "notes": "Common; recently reclassified from Puntius",
+    "gbif": {
+      "matched": true,
+      "match_type": "EXACT",
+      "usable": true,
+      "licensable": true,
+      "n_images": 33,
+      "total_with_media": 43,
+      "licences": {
+        "noncommercial-free": 30,
+        "commercial-free": 3
+      }
+    },
+    "inat": {
+      "matched": true,
+      "matched_name": "Puntigrus tetrazona",
+      "usable": true,
+      "licensable": true,
+      "n_photos": 5,
+      "default_photo_licence": "noncommercial-free",
+      "licences": {
+        "noncommercial-free": 1,
+        "commercial-free": 3,
+        "noderiv-free": 1
+      }
+    },
+    "wikimedia": {
+      "matched": true,
+      "title": "Tiger barb",
+      "usable": true,
+      "licence_raw": "CC BY-SA 4.0",
+      "licence_bucket": "commercial-free",
+      "licensable": true
+    }
+  },
+  {
+    "sku": "180142",
+    "name": "White Cloud",
+    "category": "Danio",
+    "resolved_species": "Tanichthys albonubes",
+    "resolution_confidence": "high",
+    "kind": "wild-type",
+    "notes": "Common",
+    "gbif": {
+      "matched": true,
+      "match_type": "EXACT",
+      "usable": true,
+      "licensable": true,
+      "n_images": 51,
+      "total_with_media": 36,
+      "licences": {
+        "noncommercial-free": 51
+      }
+    },
+    "inat": {
+      "matched": true,
+      "matched_name": "Tanichthys albonubes",
+      "usable": true,
+      "licensable": true,
+      "n_photos": 12,
+      "default_photo_licence": "commercial-free",
+      "licences": {
+        "commercial-free": 6,
+        "noncommercial-free": 4,
+        "unknown": 2
+      }
+    },
+    "wikimedia": {
+      "matched": true,
+      "title": "White Cloud Mountain minnow",
+      "usable": true,
+      "licence_raw": "CC BY-SA 3.0",
+      "licence_bucket": "commercial-free",
+      "licensable": true
+    }
+  },
+  {
+    "sku": "190032",
+    "name": "Rasbora Clown",
+    "category": "Rasbora",
+    "resolved_species": "Rasbora kalochroma",
+    "resolution_confidence": "high",
+    "kind": "wild-type",
+    "notes": "Common",
+    "gbif": {
+      "matched": true,
+      "match_type": "EXACT",
+      "usable": true,
+      "licensable": true,
+      "n_images": 26,
+      "total_with_media": 25,
+      "licences": {
+        "noncommercial-free": 20,
+        "commercial-free": 4,
+        "noderiv-free": 2
+      }
+    },
+    "inat": {
+      "matched": true,
+      "matched_name": "Rasbora kalochroma",
+      "usable": true,
+      "licensable": true,
+      "n_photos": 7,
+      "default_photo_licence": "noncommercial-free",
+      "licences": {
+        "noncommercial-free": 3,
+        "unknown": 3,
+        "commercial-free": 1
+      }
+    },
+    "wikimedia": {
+      "matched": true,
+      "title": "Rasbora",
+      "usable": true,
+      "licence_raw": "CC BY-SA 3.0",
+      "licence_bucket": "commercial-free",
+      "licensable": true
+    }
+  },
+  {
+    "sku": "320072",
+    "name": "Gourami Honey Dwarf",
+    "category": "Gourami",
+    "resolved_species": "Trichogaster chuna",
+    "resolution_confidence": "high",
+    "kind": "wild-type",
+    "notes": "Synonym Colisa chuna",
+    "gbif": {
+      "matched": true,
+      "match_type": "EXACT",
+      "usable": true,
+      "licensable": true,
+      "n_images": 9,
+      "total_with_media": 5,
+      "licences": {
+        "noncommercial-free": 6,
+        "commercial-free": 3
+      }
+    },
+    "inat": {
+      "matched": true,
+      "matched_name": "Trichogaster chuna",
+      "usable": true,
+      "licensable": true,
+      "n_photos": 6,
+      "default_photo_licence": "commercial-free",
+      "licences": {
+        "commercial-free": 4,
+        "noncommercial-free": 1,
+        "unknown": 1
+      }
+    },
+    "wikimedia": {
+      "matched": true,
+      "title": "Honey gourami",
+      "usable": true,
+      "licence_raw": "CC BY-SA 3.0",
+      "licence_bucket": "commercial-free",
+      "licensable": true
+    }
+  },
+  {
+    "sku": "220562",
+    "name": "Cichlid Uaru",
+    "category": "Cichlid",
+    "resolved_species": "Uaru amphiacanthoides",
+    "resolution_confidence": "high",
+    "kind": "wild-type",
+    "notes": "Common large cichlid",
+    "gbif": {
+      "matched": true,
+      "match_type": "EXACT",
+      "usable": true,
+      "licensable": true,
+      "n_images": 31,
+      "total_with_media": 20,
+      "licences": {
+        "noncommercial-free": 15,
+        "commercial-free": 15,
+        "not-licensable": 1
+      }
+    },
+    "inat": {
+      "matched": true,
+      "matched_name": "Uaru amphiacanthoides",
+      "usable": true,
+      "licensable": true,
+      "n_photos": 10,
+      "default_photo_licence": "commercial-free",
+      "licences": {
+        "commercial-free": 2,
+        "noncommercial-free": 6,
+        "unknown": 2
+      }
+    },
+    "wikimedia": {
+      "matched": true,
+      "title": "Uaru amphiacanthoides",
+      "usable": true,
+      "licence_raw": "CC BY-SA 3.0",
+      "licence_bucket": "commercial-free",
+      "licensable": true
+    }
+  },
+  {
+    "sku": "210252",
+    "name": "Cichlid Jewel",
+    "category": "Cichlid",
+    "resolved_species": "Hemichromis bimaculatus",
+    "resolution_confidence": "medium",
+    "kind": "wild-type",
+    "notes": "Trade Jewel covers several Hemichromis spp",
+    "gbif": {
+      "matched": true,
+      "match_type": "EXACT",
+      "usable": true,
+      "licensable": true,
+      "n_images": 20,
+      "total_with_media": 119,
+      "licences": {
+        "noncommercial-free": 7,
+        "commercial-free": 12,
+        "not-licensable": 1
+      }
+    },
+    "inat": {
+      "matched": false,
+      "matched_name": "Rubricatochromis bimaculatus",
+      "usable": true,
+      "licensable": true,
+      "n_photos": 8,
+      "default_photo_licence": "noncommercial-free",
+      "licences": {
+        "noncommercial-free": 5,
+        "unknown": 2,
+        "commercial-free": 1
+      }
+    },
+    "wikimedia": {
+      "matched": true,
+      "title": "African jewelfish",
+      "usable": true,
+      "licence_raw": "CC BY-SA 3.0",
+      "licence_bucket": "commercial-free",
+      "licensable": true
+    }
+  },
+  {
+    "sku": "130043",
+    "name": "Discus Blue Turquoise",
+    "category": "Discus",
+    "resolved_species": "Symphysodon aequifasciatus",
+    "resolution_confidence": "high",
+    "kind": "line-bred",
+    "notes": "Line-bred colour strain of a wild species",
+    "gbif": {
+      "matched": true,
+      "match_type": "EXACT",
+      "usable": true,
+      "licensable": true,
+      "n_images": 35,
+      "total_with_media": 28,
+      "licences": {
+        "noncommercial-free": 3,
+        "commercial-free": 8,
+        "not-licensable": 24
+      }
+    },
+    "inat": {
+      "matched": true,
+      "matched_name": "Symphysodon aequifasciatus",
+      "usable": true,
+      "licensable": true,
+      "n_photos": 11,
+      "default_photo_licence": "noncommercial-free",
+      "licences": {
+        "noncommercial-free": 6,
+        "commercial-free": 5
+      }
+    },
+    "wikimedia": {
+      "matched": true,
+      "title": "Discus (fish)",
+      "usable": true,
+      "licence_raw": "Public domain",
+      "licence_bucket": "commercial-free",
+      "licensable": true
+    }
+  },
+  {
+    "sku": "450013",
+    "name": "Arowana Silver",
+    "category": "Monster/Oddball",
+    "resolved_species": "Osteoglossum bicirrhosum",
+    "resolution_confidence": "high",
+    "kind": "wild-type",
+    "notes": "Large oddball",
+    "gbif": {
+      "matched": true,
+      "match_type": "EXACT",
+      "usable": true,
+      "licensable": true,
+      "n_images": 34,
+      "total_with_media": 134,
+      "licences": {
+        "noncommercial-free": 33,
+        "commercial-free": 1
+      }
+    },
+    "inat": {
+      "matched": true,
+      "matched_name": "Osteoglossum bicirrhosum",
+      "usable": true,
+      "licensable": true,
+      "n_photos": 11,
+      "default_photo_licence": "commercial-free",
+      "licences": {
+        "commercial-free": 1,
+        "noncommercial-free": 7,
+        "unknown": 3
+      }
+    },
+    "wikimedia": {
+      "matched": true,
+      "title": "Silver arowana",
+      "usable": true,
+      "licence_raw": "CC BY-SA 3.0",
+      "licence_bucket": "commercial-free",
+      "licensable": true
+    }
+  },
+  {
+    "sku": "110162",
+    "name": "Tigerfish Goliath",
+    "category": "Monster/Oddball",
+    "resolved_species": "Hydrocynus goliath",
+    "resolution_confidence": "high",
+    "kind": "wild-type",
+    "notes": "Oddball; rare in trade",
+    "gbif": {
+      "matched": true,
+      "match_type": "EXACT",
+      "usable": true,
+      "licensable": true,
+      "n_images": 30,
+      "total_with_media": 18,
+      "licences": {
+        "noncommercial-free": 6,
+        "commercial-free": 24
+      }
+    },
+    "inat": {
+      "matched": true,
+      "matched_name": "Hydrocynus goliath",
+      "usable": true,
+      "licensable": true,
+      "n_photos": 11,
+      "default_photo_licence": "noncommercial-free",
+      "licences": {
+        "noncommercial-free": 3,
+        "commercial-free": 5,
+        "unknown": 3
+      }
+    },
+    "wikimedia": {
+      "matched": true,
+      "title": "Hydrocynus goliath",
+      "usable": true,
+      "licence_raw": "CC BY-SA 4.0",
+      "licence_bucket": "commercial-free",
+      "licensable": true
+    }
+  },
+  {
+    "sku": "440082",
+    "name": "Puffer Miurus",
+    "category": "Puffer",
+    "resolved_species": "Pao miurus",
+    "resolution_confidence": "high",
+    "kind": "wild-type",
+    "notes": "Formerly Tetraodon miurus",
+    "gbif": {
+      "matched": true,
+      "match_type": "HIGHERRANK",
+      "usable": true,
+      "licensable": true,
+      "n_images": 41,
+      "total_with_media": 98,
+      "licences": {
+        "noncommercial-free": 37,
+        "commercial-free": 4
+      }
+    },
+    "inat": {
+      "matched": false,
+      "usable": false,
+      "licensable": false,
+      "n_photos": 0,
+      "licences": {}
+    },
+    "wikimedia": {
+      "matched": true,
+      "title": "Tetraodon",
+      "usable": true,
+      "licence_raw": "CC BY-SA 4.0",
+      "licence_bucket": "commercial-free",
+      "licensable": true
+    }
+  },
+  {
+    "sku": "280072",
+    "name": "Shrimp Blue Velvet",
+    "category": "Shrimp",
+    "resolved_species": "Neocaridina davidi",
+    "resolution_confidence": "high",
+    "kind": "line-bred",
+    "notes": "Selectively bred colour morph",
+    "gbif": {
+      "matched": true,
+      "match_type": "EXACT",
+      "usable": true,
+      "licensable": true,
+      "n_images": 33,
+      "total_with_media": 137,
+      "licences": {
+        "noncommercial-free": 33
+      }
+    },
+    "inat": {
+      "matched": true,
+      "matched_name": "Neocaridina davidi",
+      "usable": true,
+      "licensable": true,
+      "n_photos": 12,
+      "default_photo_licence": "noncommercial-free",
+      "licences": {
+        "noncommercial-free": 8,
+        "commercial-free": 3,
+        "noderiv-free": 1
+      }
+    },
+    "wikimedia": {
+      "matched": true,
+      "title": "Neocaridina davidi",
+      "usable": true,
+      "licence_raw": "CC BY-SA 3.0",
+      "licence_bucket": "commercial-free",
+      "licensable": true
+    }
+  },
+  {
+    "sku": "290052",
+    "name": "Snail Japanese Trapdoor",
+    "category": "Snail",
+    "resolved_species": "Cipangopaludina japonica",
+    "resolution_confidence": "medium",
+    "kind": "wild-type",
+    "notes": "Trade name maps to several Cipangopaludina spp",
+    "gbif": {
+      "matched": true,
+      "match_type": "EXACT",
+      "usable": true,
+      "licensable": true,
+      "n_images": 36,
+      "total_with_media": 210,
+      "licences": {
+        "commercial-free": 9,
+        "noncommercial-free": 27
+      }
+    },
+    "inat": {
+      "matched": false,
+      "matched_name": "Heterogen japonica",
+      "usable": true,
+      "licensable": true,
+      "n_photos": 3,
+      "default_photo_licence": "unknown",
+      "licences": {
+        "unknown": 1,
+        "noncommercial-free": 2
+      }
+    },
+    "wikimedia": {
+      "matched": true,
+      "title": "Cipangopaludina",
+      "usable": true,
+      "licence_raw": "CC0",
+      "licence_bucket": "commercial-free",
+      "licensable": true
+    }
+  },
+  {
+    "sku": "260013",
+    "name": "African Dwarf Frog",
+    "category": "Frog",
+    "resolved_species": "Hymenochirus boettgeri",
+    "resolution_confidence": "medium",
+    "kind": "wild-type",
+    "notes": "Trade ADF is Hymenochirus boettgeri or curtipes",
+    "gbif": {
+      "matched": true,
+      "match_type": "EXACT",
+      "usable": true,
+      "licensable": true,
+      "n_images": 59,
+      "total_with_media": 37,
+      "licences": {
+        "noncommercial-free": 33,
+        "commercial-free": 26
+      }
+    },
+    "inat": {
+      "matched": true,
+      "matched_name": "Hymenochirus boettgeri",
+      "usable": true,
+      "licensable": true,
+      "n_photos": 7,
+      "default_photo_licence": "commercial-free",
+      "licences": {
+        "commercial-free": 2,
+        "noncommercial-free": 4,
+        "unknown": 1
+      }
+    },
+    "wikimedia": {
+      "matched": true,
+      "title": "Hymenochirus boettgeri",
+      "usable": true,
+      "licence_raw": "CC BY-SA 3.0",
+      "licence_bucket": "commercial-free",
+      "licensable": true
+    }
+  },
+  {
+    "sku": "460012",
+    "name": "Apistogramma Agassizi",
+    "category": "Apistogramma",
+    "resolved_species": "Apistogramma agassizii",
+    "resolution_confidence": "high",
+    "kind": "wild-type",
+    "notes": "Common dwarf cichlid",
+    "gbif": {
+      "matched": true,
+      "match_type": "EXACT",
+      "usable": true,
+      "licensable": true,
+      "n_images": 15,
+      "total_with_media": 13,
+      "licences": {
+        "noncommercial-free": 5,
+        "commercial-free": 8,
+        "not-licensable": 2
+      }
+    },
+    "inat": {
+      "matched": true,
+      "matched_name": "Apistogramma agassizii",
+      "usable": true,
+      "licensable": true,
+      "n_photos": 9,
+      "default_photo_licence": "commercial-free",
+      "licences": {
+        "commercial-free": 2,
+        "noncommercial-free": 7
+      }
+    },
+    "wikimedia": {
+      "matched": true,
+      "title": "Apistogramma agassizii",
+      "usable": true,
+      "licence_raw": "CC BY-SA 3.0",
+      "licence_bucket": "commercial-free",
+      "licensable": true
+    }
+  },
+  {
+    "sku": "240032",
+    "name": "Cory Adolfoi",
+    "category": "Cory",
+    "resolved_species": "Corydoras adolfoi",
+    "resolution_confidence": "high",
+    "kind": "wild-type",
+    "notes": "Common",
+    "gbif": {
+      "matched": true,
+      "match_type": "EXACT",
+      "usable": true,
+      "licensable": false,
+      "n_images": 1,
+      "total_with_media": 1,
+      "licences": {
+        "not-licensable": 1
+      }
+    },
+    "inat": {
+      "matched": false,
+      "matched_name": "Hoplisoma adolfoi",
+      "usable": true,
+      "licensable": true,
+      "n_photos": 5,
+      "default_photo_licence": "commercial-free",
+      "licences": {
+        "commercial-free": 3,
+        "noncommercial-free": 2
+      }
+    },
+    "wikimedia": {
+      "matched": true,
+      "title": "Adolfo's catfish",
+      "usable": true,
+      "licence_raw": "CC BY-SA 4.0",
+      "licence_bucket": "commercial-free",
+      "licensable": true
+    }
+  },
+  {
+    "sku": "430113",
+    "name": "Rainbowfish Red Irian",
+    "category": "Rainbowfish",
+    "resolved_species": "Glossolepis incisus",
+    "resolution_confidence": "high",
+    "kind": "wild-type",
+    "notes": "Common",
+    "gbif": {
+      "matched": true,
+      "match_type": "EXACT",
+      "usable": true,
+      "licensable": true,
+      "n_images": 2,
+      "total_with_media": 2,
+      "licences": {
+        "commercial-free": 2
+      }
+    },
+    "inat": {
+      "matched": false,
+      "matched_name": "Glossolepis incisa",
+      "usable": true,
+      "licensable": true,
+      "n_photos": 10,
+      "default_photo_licence": "commercial-free",
+      "licences": {
+        "commercial-free": 4,
+        "noncommercial-free": 6
+      }
+    },
+    "wikimedia": {
+      "matched": true,
+      "title": "Red rainbowfish",
+      "usable": true,
+      "licence_raw": "CC BY-SA 3.0",
+      "licence_bucket": "commercial-free",
+      "licensable": true
+    }
+  },
+  {
+    "sku": "320022",
+    "name": "Gourami Chocolate",
+    "category": "Gourami",
+    "resolved_species": "Sphaerichthys osphromenoides",
+    "resolution_confidence": "high",
+    "kind": "wild-type",
+    "notes": "Common",
+    "gbif": {
+      "matched": true,
+      "match_type": "EXACT",
+      "usable": true,
+      "licensable": true,
+      "n_images": 45,
+      "total_with_media": 32,
+      "licences": {
+        "noncommercial-free": 44,
+        "commercial-free": 1
+      }
+    },
+    "inat": {
+      "matched": true,
+      "matched_name": "Sphaerichthys osphromenoides",
+      "usable": true,
+      "licensable": true,
+      "n_photos": 11,
+      "default_photo_licence": "noncommercial-free",
+      "licences": {
+        "noncommercial-free": 6,
+        "commercial-free": 4,
+        "unknown": 1
+      }
+    },
+    "wikimedia": {
+      "matched": true,
+      "title": "Chocolate gourami",
+      "usable": true,
+      "licence_raw": "Public domain",
+      "licence_bucket": "commercial-free",
+      "licensable": true
+    }
+  },
+  {
+    "sku": "140022",
+    "name": "Badis Scarlet Gem",
+    "category": "Monster/Oddball",
+    "resolved_species": "Dario dario",
+    "resolution_confidence": "high",
+    "kind": "wild-type",
+    "notes": "Common nano oddball",
+    "gbif": {
+      "matched": true,
+      "match_type": "EXACT",
+      "usable": true,
+      "licensable": true,
+      "n_images": 3,
+      "total_with_media": 3,
+      "licences": {
+        "commercial-free": 3
+      }
+    },
+    "inat": {
+      "matched": false,
+      "matched_name": "Botia dario",
+      "usable": true,
+      "licensable": true,
+      "n_photos": 5,
+      "default_photo_licence": "commercial-free",
+      "licences": {
+        "commercial-free": 3,
+        "noncommercial-free": 2
+      }
+    },
+    "wikimedia": {
+      "matched": true,
+      "title": "Dario Amodei",
+      "usable": true,
+      "licence_raw": "CC BY 2.0",
+      "licence_bucket": "commercial-free",
+      "licensable": true
+    }
+  },
+  {
+    "sku": "480022",
+    "name": "Tetra Black Phantom",
+    "category": "Tetra",
+    "resolved_species": "Hyphessobrycon megalopterus",
+    "resolution_confidence": "high",
+    "kind": "wild-type",
+    "notes": "Common",
+    "gbif": {
+      "matched": true,
+      "match_type": "EXACT",
+      "usable": true,
+      "licensable": true,
+      "n_images": 10,
+      "total_with_media": 5,
+      "licences": {
+        "noncommercial-free": 4,
+        "commercial-free": 6
+      }
+    },
+    "inat": {
+      "matched": false,
+      "matched_name": "Megalamphodus megalopterus",
+      "usable": true,
+      "licensable": true,
+      "n_photos": 6,
+      "default_photo_licence": "noncommercial-free",
+      "licences": {
+        "noncommercial-free": 2,
+        "commercial-free": 4
+      }
+    },
+    "wikimedia": {
+      "matched": true,
+      "title": "Black phantom tetra",
+      "usable": true,
+      "licence_raw": "CC BY-SA 3.0",
+      "licence_bucket": "commercial-free",
+      "licensable": true
+    }
+  },
+  {
+    "sku": "250032",
+    "name": "Shark Rainbow",
+    "category": "Shark",
+    "resolved_species": "Epalzeorhynchos frenatum",
+    "resolution_confidence": "high",
+    "kind": "wild-type",
+    "notes": "Common",
+    "gbif": {
+      "matched": true,
+      "match_type": "FUZZY",
+      "usable": true,
+      "licensable": true,
+      "n_images": 22,
+      "total_with_media": 13,
+      "licences": {
+        "noncommercial-free": 17,
+        "noderiv-free": 2,
+        "commercial-free": 3
+      }
+    },
+    "inat": {
+      "matched": true,
+      "matched_name": "Epalzeorhynchos frenatum",
+      "usable": true,
+      "licensable": true,
+      "n_photos": 10,
+      "default_photo_licence": "commercial-free",
+      "licences": {
+        "commercial-free": 4,
+        "noncommercial-free": 6
+      }
+    },
+    "wikimedia": {
+      "matched": true,
+      "title": "Rainbow shark",
+      "usable": true,
+      "licence_raw": "CC BY-SA 3.0",
+      "licence_bucket": "commercial-free",
+      "licensable": true
+    }
+  },
+  {
+    "sku": "110022",
+    "name": "Baby Whale Fish",
+    "category": "Monster/Oddball",
+    "resolved_species": "Pollimyrus isidori",
+    "resolution_confidence": "low",
+    "kind": "wild-type",
+    "notes": "Trade Baby/Dwarf Whale is an ambiguous mormyrid",
+    "gbif": {
+      "matched": true,
+      "match_type": "EXACT",
+      "usable": true,
+      "licensable": true,
+      "n_images": 24,
+      "total_with_media": 49,
+      "licences": {
+        "noncommercial-free": 10,
+        "commercial-free": 14
+      }
+    },
+    "inat": {
+      "matched": true,
+      "matched_name": "Pollimyrus isidori",
+      "usable": true,
+      "licensable": true,
+      "n_photos": 4,
+      "default_photo_licence": "unknown",
+      "licences": {
+        "unknown": 1,
+        "commercial-free": 3
+      }
+    },
+    "wikimedia": {
+      "matched": true,
+      "title": "Pollimyrus isidori",
+      "usable": true,
+      "licence_raw": "Public domain",
+      "licence_bucket": "commercial-free",
+      "licensable": true
+    }
+  },
+  {
+    "sku": "140152",
+    "name": "Mudskipper Indian",
+    "category": "Monster/Oddball",
+    "resolved_species": "Periophthalmus novemradiatus",
+    "resolution_confidence": "medium",
+    "kind": "wild-type",
+    "notes": "Oddball; trade ID imprecise",
+    "gbif": {
+      "matched": true,
+      "match_type": "EXACT",
+      "usable": true,
+      "licensable": true,
+      "n_images": 24,
+      "total_with_media": 46,
+      "licences": {
+        "noncommercial-free": 24
+      }
+    },
+    "inat": {
+      "matched": true,
+      "matched_name": "Periophthalmus novemradiatus",
+      "usable": true,
+      "licensable": true,
+      "n_photos": 5,
+      "default_photo_licence": "unknown",
+      "licences": {
+        "unknown": 2,
+        "commercial-free": 3
+      }
+    },
+    "wikimedia": {
+      "matched": true,
+      "title": "Periophthalmus",
+      "usable": true,
+      "licence_raw": "CC BY 3.0",
+      "licence_bucket": "commercial-free",
+      "licensable": true
+    }
+  },
+  {
+    "sku": "160052",
+    "name": "Goby Lipstick",
+    "category": "Goby",
+    "resolved_species": "Sicyopus zosterophorum",
+    "resolution_confidence": "low",
+    "kind": "wild-type",
+    "notes": "Trade Lipstick Goby is ambiguous",
+    "gbif": {
+      "matched": true,
+      "match_type": "FUZZY",
+      "usable": true,
+      "licensable": true,
+      "n_images": 41,
+      "total_with_media": 88,
+      "licences": {
+        "noncommercial-free": 41
+      }
+    },
+    "inat": {
+      "matched": false,
+      "matched_name": "Sicyopus zosterophorus",
+      "usable": true,
+      "licensable": true,
+      "n_photos": 4,
+      "default_photo_licence": "unknown",
+      "licences": {
+        "unknown": 2,
+        "noncommercial-free": 2
+      }
+    },
+    "wikimedia": {
+      "matched": true,
+      "title": "Sicyopus",
+      "usable": true,
+      "licence_raw": "CC BY-SA 4.0",
+      "licence_bucket": "commercial-free",
+      "licensable": true
+    }
+  },
+  {
+    "sku": "350112",
+    "name": "Ricefish Snow White",
+    "category": "Killifish",
+    "resolved_species": "Oryzias latipes",
+    "resolution_confidence": "low",
+    "kind": "line-bred",
+    "notes": "Snow White is a leucistic strain; base species uncertain",
+    "gbif": {
+      "matched": true,
+      "match_type": "EXACT",
+      "usable": true,
+      "licensable": true,
+      "n_images": 30,
+      "total_with_media": 240,
+      "licences": {
+        "commercial-free": 13,
+        "noncommercial-free": 17
+      }
+    },
+    "inat": {
+      "matched": false,
+      "matched_name": "Oryzias sinensis",
+      "usable": true,
+      "licensable": true,
+      "n_photos": 6,
+      "default_photo_licence": "commercial-free",
+      "licences": {
+        "commercial-free": 3,
+        "unknown": 2,
+        "noncommercial-free": 1
+      }
+    },
+    "wikimedia": {
+      "matched": true,
+      "title": "Japanese rice fish",
+      "usable": true,
+      "licence_raw": "CC BY-SA 3.0",
+      "licence_bucket": "commercial-free",
+      "licensable": true
+    }
+  },
+  {
+    "sku": "340272",
+    "name": "Guppy Tequila Sunrise: Pair",
+    "category": "Guppy",
+    "resolved_species": "Poecilia reticulata",
+    "resolution_confidence": "high",
+    "kind": "line-bred",
+    "notes": "Fancy guppy colour strain",
+    "gbif": {
+      "matched": true,
+      "match_type": "EXACT",
+      "usable": true,
+      "licensable": true,
+      "n_images": 35,
+      "total_with_media": 1724,
+      "licences": {
+        "noncommercial-free": 29,
+        "commercial-free": 6
+      }
+    },
+    "inat": {
+      "matched": true,
+      "matched_name": "Poecilia reticulata",
+      "usable": true,
+      "licensable": true,
+      "n_photos": 12,
+      "default_photo_licence": "unknown",
+      "licences": {
+        "unknown": 2,
+        "commercial-free": 6,
+        "noncommercial-free": 4
+      }
+    },
+    "wikimedia": {
+      "matched": true,
+      "title": "Guppy",
+      "usable": true,
+      "licence_raw": "CC BY 3.0",
+      "licence_bucket": "commercial-free",
+      "licensable": true
+    }
+  },
+  {
+    "sku": "120122",
+    "name": "Angelfish Gold Marble",
+    "category": "Angelfish",
+    "resolved_species": "Pterophyllum scalare",
+    "resolution_confidence": "high",
+    "kind": "line-bred",
+    "notes": "Domestic angel colour strain",
+    "gbif": {
+      "matched": true,
+      "match_type": "EXACT",
+      "usable": true,
+      "licensable": true,
+      "n_images": 24,
+      "total_with_media": 76,
+      "licences": {
+        "noncommercial-free": 22,
+        "commercial-free": 2
+      }
+    },
+    "inat": {
+      "matched": true,
+      "matched_name": "Pterophyllum scalare",
+      "usable": true,
+      "licensable": true,
+      "n_photos": 6,
+      "default_photo_licence": "commercial-free",
+      "licences": {
+        "commercial-free": 3,
+        "noncommercial-free": 2,
+        "unknown": 1
+      }
+    },
+    "wikimedia": {
+      "matched": true,
+      "title": "Pterophyllum scalare",
+      "usable": true,
+      "licence_raw": "CC BY-SA 4.0",
+      "licence_bucket": "commercial-free",
+      "licensable": true
+    }
+  },
+  {
+    "sku": "410252",
+    "name": "Platy Red Mickey Mouse",
+    "category": "Platy",
+    "resolved_species": "Xiphophorus maculatus",
+    "resolution_confidence": "high",
+    "kind": "line-bred",
+    "notes": "Domestic platy strain",
+    "gbif": {
+      "matched": true,
+      "match_type": "EXACT",
+      "usable": true,
+      "licensable": true,
+      "n_images": 27,
+      "total_with_media": 308,
+      "licences": {
+        "noncommercial-free": 23,
+        "commercial-free": 4
+      }
+    },
+    "inat": {
+      "matched": true,
+      "matched_name": "Xiphophorus maculatus",
+      "usable": true,
+      "licensable": true,
+      "n_photos": 11,
+      "default_photo_licence": "noncommercial-free",
+      "licences": {
+        "noncommercial-free": 3,
+        "unknown": 2,
+        "commercial-free": 6
+      }
+    },
+    "wikimedia": {
+      "matched": true,
+      "title": "Southern platyfish",
+      "usable": true,
+      "licence_raw": "CC BY-SA 3.0",
+      "licence_bucket": "commercial-free",
+      "licensable": true
+    }
+  },
+  {
+    "sku": "470142",
+    "name": "Swordtail Red Lyretail Hi Fin",
+    "category": "Swordtail",
+    "resolved_species": "Xiphophorus hellerii",
+    "resolution_confidence": "high",
+    "kind": "line-bred",
+    "notes": "Domestic swordtail fin/colour strain",
+    "gbif": {
+      "matched": true,
+      "match_type": "EXACT",
+      "usable": true,
+      "licensable": true,
+      "n_images": 35,
+      "total_with_media": 1105,
+      "licences": {
+        "noncommercial-free": 35
+      }
+    },
+    "inat": {
+      "matched": true,
+      "matched_name": "Xiphophorus hellerii",
+      "usable": true,
+      "licensable": true,
+      "n_photos": 8,
+      "default_photo_licence": "noncommercial-free",
+      "licences": {
+        "noncommercial-free": 7,
+        "unknown": 1
+      }
+    },
+    "wikimedia": {
+      "matched": true,
+      "title": "Green swordtail",
+      "usable": true,
+      "licence_raw": "CC BY-SA 4.0",
+      "licence_bucket": "commercial-free",
+      "licensable": true
+    }
+  },
+  {
+    "sku": "200052",
+    "name": "Betta Half Moon Male",
+    "category": "Betta",
+    "resolved_species": "Betta splendens",
+    "resolution_confidence": "high",
+    "kind": "line-bred",
+    "notes": "Domestic betta finnage strain",
+    "gbif": {
+      "matched": true,
+      "match_type": "EXACT",
+      "usable": true,
+      "licensable": true,
+      "n_images": 31,
+      "total_with_media": 42,
+      "licences": {
+        "noncommercial-free": 31
+      }
+    },
+    "inat": {
+      "matched": true,
+      "matched_name": "Betta splendens",
+      "usable": true,
+      "licensable": true,
+      "n_photos": 6,
+      "default_photo_licence": "unknown",
+      "licences": {
+        "unknown": 4,
+        "noncommercial-free": 2
+      }
+    },
+    "wikimedia": {
+      "matched": true,
+      "title": "Siamese fighting fish",
+      "usable": true,
+      "licence_raw": "CC BY 2.0",
+      "licence_bucket": "commercial-free",
+      "licensable": true
+    }
+  },
+  {
+    "sku": "310192",
+    "name": "Goldfish Pearlscale",
+    "category": "Goldfish",
+    "resolved_species": "Carassius auratus",
+    "resolution_confidence": "high",
+    "kind": "line-bred",
+    "notes": "Fancy goldfish body strain",
+    "gbif": {
+      "matched": true,
+      "match_type": "EXACT",
+      "usable": true,
+      "licensable": true,
+      "n_images": 25,
+      "total_with_media": 5859,
+      "licences": {
+        "noncommercial-free": 25
+      }
+    },
+    "inat": {
+      "matched": true,
+      "matched_name": "Carassius auratus",
+      "usable": true,
+      "licensable": true,
+      "n_photos": 11,
+      "default_photo_licence": "unknown",
+      "licences": {
+        "unknown": 3,
+        "noncommercial-free": 8
+      }
+    },
+    "wikimedia": {
+      "matched": true,
+      "title": "Goldfish",
+      "usable": true,
+      "licence_raw": "CC BY-SA 3.0",
+      "licence_bucket": "commercial-free",
+      "licensable": true
+    }
+  },
+  {
+    "sku": "370023",
+    "name": "Koi Assorted Sho",
+    "category": "Koi",
+    "resolved_species": "Cyprinus rubrofuscus",
+    "resolution_confidence": "high",
+    "kind": "line-bred",
+    "notes": "Sho = Sanke/Showa koi colour pattern",
+    "gbif": {
+      "matched": true,
+      "match_type": "EXACT",
+      "usable": true,
+      "licensable": true,
+      "n_images": 39,
+      "total_with_media": 4789,
+      "licences": {
+        "noncommercial-free": 28,
+        "commercial-free": 11
+      }
+    },
+    "inat": {
+      "matched": true,
+      "matched_name": "Cyprinus rubrofuscus",
+      "usable": true,
+      "licensable": true,
+      "n_photos": 12,
+      "default_photo_licence": "unknown",
+      "licences": {
+        "unknown": 2,
+        "noncommercial-free": 10
+      }
+    },
+    "wikimedia": {
+      "matched": true,
+      "title": "Cyprinus rubrofuscus",
+      "usable": true,
+      "licence_raw": "CC BY 2.0",
+      "licence_bucket": "commercial-free",
+      "licensable": true
+    }
+  },
+  {
+    "sku": "330132",
+    "name": "Molly Dalmation Sailfin",
+    "category": "Molly",
+    "resolved_species": "Poecilia latipinna",
+    "resolution_confidence": "medium",
+    "kind": "line-bred",
+    "notes": "Sailfin molly strain; possibly hybrid velifera",
+    "gbif": {
+      "matched": true,
+      "match_type": "EXACT",
+      "usable": true,
+      "licensable": true,
+      "n_images": 43,
+      "total_with_media": 3074,
+      "licences": {
+        "noncommercial-free": 33,
+        "commercial-free": 10
+      }
+    },
+    "inat": {
+      "matched": true,
+      "matched_name": "Poecilia latipinna",
+      "usable": true,
+      "licensable": true,
+      "n_photos": 12,
+      "default_photo_licence": "noncommercial-free",
+      "licences": {
+        "noncommercial-free": 7,
+        "unknown": 3,
+        "commercial-free": 2
+      }
+    },
+    "wikimedia": {
+      "matched": true,
+      "title": "Sailfin molly",
+      "usable": true,
+      "licence_raw": "CC BY 4.0",
+      "licence_bucket": "commercial-free",
+      "licensable": true
+    }
+  },
+  {
+    "sku": "300132",
+    "name": "GloFish Tetra Green",
+    "category": "GloFish",
+    "resolved_species": "Gymnocorymbus ternetzi",
+    "resolution_confidence": "high",
+    "kind": "line-bred",
+    "notes": "Patented GM fluorescent strain; trademark",
+    "gbif": {
+      "matched": true,
+      "match_type": "EXACT",
+      "usable": true,
+      "licensable": true,
+      "n_images": 22,
+      "total_with_media": 17,
+      "licences": {
+        "noncommercial-free": 9,
+        "not-licensable": 3,
+        "commercial-free": 10
+      }
+    },
+    "inat": {
+      "matched": true,
+      "matched_name": "Gymnocorymbus ternetzi",
+      "usable": true,
+      "licensable": true,
+      "n_photos": 5,
+      "default_photo_licence": "noncommercial-free",
+      "licences": {
+        "noncommercial-free": 4,
+        "commercial-free": 1
+      }
+    },
+    "wikimedia": {
+      "matched": true,
+      "title": "Black tetra",
+      "usable": true,
+      "licence_raw": "CC BY-SA 3.0",
+      "licence_bucket": "commercial-free",
+      "licensable": true
+    }
+  },
+  {
+    "sku": "420062",
+    "name": "Pleco L-018 Gold Nugget",
+    "category": "Pleco",
+    "resolved_species": "Baryancistrus xanthellus",
+    "resolution_confidence": "medium",
+    "kind": "wild-type",
+    "notes": "L-number; recently described species",
+    "gbif": {
+      "matched": true,
+      "match_type": "EXACT",
+      "usable": true,
+      "licensable": true,
+      "n_images": 2,
+      "total_with_media": 2,
+      "licences": {
+        "commercial-free": 2
+      }
+    },
+    "inat": {
+      "matched": true,
+      "matched_name": "Baryancistrus xanthellus",
+      "usable": true,
+      "licensable": true,
+      "n_photos": 3,
+      "default_photo_licence": "commercial-free",
+      "licences": {
+        "commercial-free": 3
+      }
+    },
+    "wikimedia": {
+      "matched": true,
+      "title": "Baryancistrus xanthellus",
+      "usable": true,
+      "licence_raw": "CC BY-SA 3.0",
+      "licence_bucket": "commercial-free",
+      "licensable": true
+    }
+  },
+  {
+    "sku": "420411",
+    "name": "Pleco L-191 Royal",
+    "category": "Pleco",
+    "resolved_species": "Panaque cf. nigrolineatus",
+    "resolution_confidence": "low",
+    "kind": "wild-type",
+    "notes": "L-number; undescribed/uncertain species",
+    "gbif": {
+      "matched": true,
+      "match_type": "EXACT",
+      "usable": true,
+      "licensable": true,
+      "n_images": 30,
+      "total_with_media": 9,
+      "licences": {
+        "noncommercial-free": 24,
+        "commercial-free": 6
+      }
+    },
+    "inat": {
+      "matched": false,
+      "usable": false,
+      "licensable": false,
+      "n_photos": 0,
+      "licences": {}
+    },
+    "wikimedia": {
+      "matched": true,
+      "title": "Panaque nigrolineatus",
+      "usable": true,
+      "licence_raw": "CC BY-SA 3.0",
+      "licence_bucket": "commercial-free",
+      "licensable": true
+    }
+  },
+  {
+    "sku": "758162",
+    "name": "Four Leaf Clover",
+    "category": "Plant",
+    "resolved_species": "Marsilea hirsuta",
+    "resolution_confidence": "medium",
+    "kind": "wild-type",
+    "notes": "Aquatic fern; trade name ambiguous across Marsilea spp",
+    "gbif": {
+      "matched": true,
+      "match_type": "EXACT",
+      "usable": true,
+      "licensable": true,
+      "n_images": 81,
+      "total_with_media": 512,
+      "licences": {
+        "noncommercial-free": 58,
+        "commercial-free": 23
+      }
+    },
+    "inat": {
+      "matched": true,
+      "matched_name": "Marsilea hirsuta",
+      "usable": true,
+      "licensable": true,
+      "n_photos": 4,
+      "default_photo_licence": "commercial-free",
+      "licences": {
+        "commercial-free": 4
+      }
+    },
+    "wikimedia": {
+      "matched": true,
+      "title": "Marsilea hirsuta",
+      "usable": true,
+      "licence_raw": "CC BY-SA 4.0",
+      "licence_bucket": "commercial-free",
+      "licensable": true
+    }
+  },
+  {
+    "sku": "752074",
+    "name": "Red Flame",
+    "category": "Plant",
+    "resolved_species": "Echinodorus 'Red Flame'",
+    "resolution_confidence": "low",
+    "kind": "line-bred",
+    "notes": "Cultivar trade name; not a clean species",
+    "gbif": {
+      "matched": false,
+      "usable": false,
+      "licensable": false,
+      "n_images": 0,
+      "licences": {}
+    },
+    "inat": {
+      "matched": false,
+      "usable": false,
+      "licensable": false,
+      "n_photos": 0,
+      "licences": {}
+    },
+    "wikimedia": {
+      "matched": true,
+      "title": "List of least concern plants",
+      "usable": false,
+      "licensable": false
+    }
+  },
+  {
+    "sku": "480432",
+    "name": "Pencilfish Ruby Red",
+    "category": "Tetra",
+    "resolved_species": "Nannostomus mortenthaleri",
+    "resolution_confidence": "medium",
+    "kind": "wild-type",
+    "notes": "Coral red pencilfish",
+    "gbif": {
+      "matched": true,
+      "match_type": "EXACT",
+      "usable": true,
+      "licensable": true,
+      "n_images": 2,
+      "total_with_media": 1,
+      "licences": {
+        "noncommercial-free": 2
+      }
+    },
+    "inat": {
+      "matched": true,
+      "matched_name": "Nannostomus mortenthaleri",
+      "usable": true,
+      "licensable": true,
+      "n_photos": 1,
+      "default_photo_licence": "commercial-free",
+      "licences": {
+        "commercial-free": 1
+      }
+    },
+    "wikimedia": {
+      "matched": true,
+      "title": "Nannostomus mortenthaleri",
+      "usable": true,
+      "licence_raw": "CC BY 2.0",
+      "licence_bucket": "commercial-free",
+      "licensable": true
+    }
+  }
+]
