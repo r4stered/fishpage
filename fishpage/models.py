@@ -1,8 +1,35 @@
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
+from enum import StrEnum
 
 from fishpage.category import derive_category
+
+
+class Provenance(StrEnum):
+    """The recorded origin of an enriched value on an Item.
+
+    ``MANUAL`` is authoritative: re-running Enrichment never overwrites it. The sourced values come
+    from the best-effort image/Classifier pipeline.
+    """
+
+    MANUAL = "manual"
+    WIKIMEDIA = "wikimedia"
+    AI_GENERATED = "ai-generated"
+
+
+@dataclass(frozen=True)
+class ImageRecord:
+    """One Item's image metadata — the R2 object key plus its license/attribution, never the bytes.
+
+    ``provenance`` records who supplied it; a ``MANUAL`` image is un-clobberable by re-enrichment.
+    """
+
+    object_key: str
+    license: str | None
+    attribution: str | None
+    source_url: str | None
+    provenance: Provenance
 
 
 @dataclass(frozen=True)

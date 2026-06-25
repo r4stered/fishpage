@@ -1,7 +1,11 @@
 <ul class="catalog-grid">
   {% for item in items %}
   <li class="card" data-sku="{{ item.sku }}">
+    {% if item.sku in image_skus %}
+    <img class="image" src="/items/{{ item.sku }}/image" alt="{{ item.name }}">
+    {% else %}
     <img class="placeholder" src="/static/placeholder.svg" alt="placeholder image for {{ item.name }}">
+    {% endif %}
     <h2 class="name">{{ item.name }}</h2>
     <span class="size">{{ item.size }}</span>
     <span class="retail-price">${{ item.retail_price }}</span>
@@ -9,6 +13,12 @@
     <span class="special-price">special ${{ item.special_price }}</span>
     {% endif %}
     <span class="qty">{{ item.qty_avail }} available</span>
+    {% if images_enabled %}
+    <form class="image-upload" action="/items/{{ item.sku }}/image" method="post" enctype="multipart/form-data">
+      <input type="file" name="file" accept="image/*" required>
+      <button type="submit">Add image</button>
+    </form>
+    {% endif %}
   </li>
   {% endfor %}
 </ul>

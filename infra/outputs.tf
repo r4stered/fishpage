@@ -10,6 +10,10 @@ locals {
   r2_access_key_id     = cloudflare_account_token.r2.id
   r2_secret_access_key = sha256(cloudflare_account_token.r2.value)
 
+  # The image bucket shares the account R2 endpoint but uses its own token's derived S3 keys.
+  r2_images_access_key_id     = cloudflare_account_token.r2_images.id
+  r2_images_secret_access_key = sha256(cloudflare_account_token.r2_images.value)
+
   # Grafana Cloud's OTLP gateway takes Basic auth of "<instance id>:<token>". The stack attribute is
   # the gateway base without the "/otlp" path the OTLP/HTTP exporter posts under, so append it (and
   # guard against a double suffix if the upstream value ever starts including it).
@@ -24,6 +28,9 @@ output "fly_secrets" {
     LITESTREAM_R2_ENDPOINT       = local.r2_endpoint
     LITESTREAM_ACCESS_KEY_ID     = local.r2_access_key_id
     LITESTREAM_SECRET_ACCESS_KEY = local.r2_secret_access_key
+    R2_IMAGES_ENDPOINT           = local.r2_endpoint
+    R2_IMAGES_ACCESS_KEY_ID      = local.r2_images_access_key_id
+    R2_IMAGES_SECRET_ACCESS_KEY  = local.r2_images_secret_access_key
     CLOUDFLARE_TUNNEL_TOKEN      = data.cloudflare_zero_trust_tunnel_cloudflared_token.fishpage.token
     OTEL_EXPORTER_OTLP_ENDPOINT  = local.otlp_endpoint
     OTEL_EXPORTER_OTLP_HEADERS   = local.otlp_headers

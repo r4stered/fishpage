@@ -21,6 +21,13 @@ locals {
     for g in data.cloudflare_account_api_token_permission_groups_list.r2.result :
     g.id if can(regex("R2 Storage Write", g.name))
   ])
+
+  # Read+write on a single R2 bucket (the `com.cloudflare.edge.r2.bucket` scope), for a token that
+  # can touch only the images bucket — least privilege, distinct from the account-wide group above.
+  r2_bucket_item_rw_permission_groups = [
+    for g in data.cloudflare_account_api_token_permission_groups_list.r2.result :
+    g.id if can(regex("R2 Storage Bucket Item (Read|Write)", g.name))
+  ]
 }
 
 # An account-owned token scoped to just R2 storage write — nothing else on the account, and not tied
@@ -35,6 +42,32 @@ resource "cloudflare_account_token" "r2" {
     permission_groups = [{ id = local.r2_write_permission_group }]
     resources = jsonencode({
       "com.cloudflare.api.account.${var.cloudflare_account_id}" = "*"
+    })
+  }]
+}
+
+# --- R2: a second bucket for enrichment image bytes ---
+
+# Image bytes live in their own bucket, separate from the Litestream replica, so they never enter the
+# database the restore reasons about. The app reads and writes it over R2's S3-compatible API and
+# proxies the bytes through itself — the bucket is never public — so images stay behind Access.
+resource "cloudflare_r2_bucket" "images" {
+  account_id = var.cloudflare_account_id
+  name       = var.r2_images_bucket_name
+}
+
+# A second account-owned token, scoped to read+write on just the images bucket — not account-wide R2
+# like the Litestream token — so the image credentials are least-privilege and rotate independently.
+# Its id/secret derive the S3 keys in outputs.tf and are pushed to Fly as the R2_IMAGES_* secrets.
+# The resource key is R2's per-bucket form: `<account>_<jurisdiction>_<bucket>`, default jurisdiction.
+resource "cloudflare_account_token" "r2_images" {
+  account_id = var.cloudflare_account_id
+  name       = "${var.fly_app}-r2-images"
+  policies = [{
+    effect            = "allow"
+    permission_groups = [for id in local.r2_bucket_item_rw_permission_groups : { id = id }]
+    resources = jsonencode({
+      "com.cloudflare.edge.r2.bucket.${var.cloudflare_account_id}_default_${var.r2_images_bucket_name}" = "*"
     })
   }]
 }

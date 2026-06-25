@@ -28,6 +28,9 @@ def test_cloud_dependencies_default_off_with_an_empty_environment():
     assert settings.cloud_ingestion is False
     assert settings.enrichment_enabled is False
     assert settings.anthropic_api_key is None
+    assert settings.images_enabled is False
+    assert settings.r2_images_bucket is None
+    assert settings.r2_images_endpoint is None
 
 
 def test_local_defaults_apply_when_the_environment_is_empty():

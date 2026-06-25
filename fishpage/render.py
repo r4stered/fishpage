@@ -12,10 +12,21 @@ _env = Environment(
 )
 
 
-def render_grid(items: list[Item]) -> str:
+def render_grid(
+    items: list[Item],
+    image_skus: set[str] | None = None,
+    *,
+    images_enabled: bool = False,
+) -> str:
     """Render just the grid of Item cards, the fragment shared by the full catalog page and the
-    HTMX swap. The page includes the same partial, so both paths emit identical card markup."""
-    return _env.get_template("_grid.html").render(items=items)
+    HTMX swap. The page includes the same partial, so both paths emit identical card markup.
+
+    ``image_skus`` is the set of SKUs with a stored image; a card in it points at the proxy route,
+    the rest fall back to the placeholder. ``images_enabled`` adds the per-card manual upload form
+    only when an image bucket is configured to receive it."""
+    return _env.get_template("_grid.html").render(
+        items=items, image_skus=image_skus or set(), images_enabled=images_enabled
+    )
 
 
 def render_catalog(
@@ -29,6 +40,8 @@ def render_catalog(
     on_special: bool = False,
     search: str = "",
     sort: str = "",
+    image_skus: set[str] | None = None,
+    images_enabled: bool = False,
 ) -> str:
     return _env.get_template("catalog.html").render(
         items=items,
@@ -40,6 +53,8 @@ def render_catalog(
         on_special=on_special,
         search=search,
         sort=sort,
+        image_skus=image_skus or set(),
+        images_enabled=images_enabled,
     )
 
 
