@@ -17,6 +17,7 @@ from typing import Any, Protocol, runtime_checkable
 
 from PIL import Image, UnidentifiedImageError
 
+from fishpage import observability
 from fishpage.config import Settings
 from fishpage.models import Provenance
 from fishpage.store import attach_image
@@ -97,7 +98,22 @@ def store_image(
     ``uploaded_by`` is the Uploader to credit; when present the moment it landed is stamped as
     ``uploaded_at``. The auto-source path passes no Uploader and so leaves both unset.
     """
-    optimized = optimize_image(raw_bytes, max_dimension=max_dimension)
+    try:
+        optimized = optimize_image(raw_bytes, max_dimension=max_dimension)
+    except ImageDecodeError:
+        observability.record_image_optimize_error(provenance=provenance)
+        # The counter is the dashboard signal; the detail of which upload failed rides this log so
+        # the SKU, Uploader, and decode exception stay off the metric. Same indexed fields as the
+        # success event, so both paths narrate alike. Re-raise — the caller turns it into a 400.
+        _log.warning(
+            "Failed to optimize %s image for %s",
+            provenance.value,
+            sku,
+            extra={"uploader": uploaded_by, "sku": sku, "provenance": provenance.value},
+            exc_info=True,
+        )
+        raise
+    observability.record_image_optimized(len(raw_bytes), len(optimized.data), provenance=provenance)
     image_store.put(sku, optimized.data, content_type=optimized.content_type)
     uploaded_at = None if uploaded_by is None else now()
     attach_image(

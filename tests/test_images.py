@@ -37,6 +37,7 @@ _R2_ENV = {
 
 JUN19 = date(2026, 6, 19)
 ORNATE_M = Item("110042", "M", "Bichir Ornate", Decimal("28.99"), None, 15)
+ORNATE_L = Item("110043", "L", "Bichir Ornate", Decimal("44.99"), None, 8)
 
 
 def _real_jpeg(width=64, height=48, color=(20, 120, 200)) -> bytes:
@@ -157,6 +158,58 @@ def test_store_image_carries_source_license_for_the_auto_source_path(tmp_path):
     assert record.uploaded_at is None
 
 
+def test_store_image_counts_one_optimized_image(tmp_path, telemetry):
+    store = FakeImageStore()
+    conn = _seeded_conn(tmp_path)
+
+    store_image(store, conn, "110042", JPEG, provenance=Provenance.MANUAL, max_dimension=1024)
+
+    # Every image the seam optimizes counts once, so the dashboard can show throughput — how many
+    # images have flowed through optimization — alongside the bytes saved.
+    assert telemetry.counter("fishpage.image.optimized") == 1
+
+
+def test_store_image_records_original_and_optimized_byte_counts(tmp_path, telemetry):
+    store = FakeImageStore()
+    conn = _seeded_conn(tmp_path)
+
+    store_image(store, conn, "110042", JPEG, provenance=Provenance.MANUAL, max_dimension=1024)
+
+    # Two separate byte counters, not one "bytes saved": WebP can occasionally re-encode a tiny
+    # source larger, and a monotonic counter can't carry a negative saving. Space saved and the
+    # compression ratio are derived downstream from these two totals. Optimized bytes are exactly
+    # what landed in the bucket.
+    stored = store.objects["110042"]
+    assert telemetry.counter("fishpage.image.original_bytes") == len(JPEG)
+    assert telemetry.counter("fishpage.image.optimized_bytes") == len(stored.data)
+
+
+def test_optimization_counters_are_attributed_only_by_provenance(tmp_path, telemetry):
+    store = FakeImageStore()
+    conn = open_store(tmp_path / "fishpage.db")
+    reconcile(conn, [ORNATE_M, ORNATE_L], JUN19)
+
+    # Two stores down two paths: a manual upload with an Uploader, and an auto-source store with
+    # neither. Distinct SKUs and a distinct Uploader between them — none of which may be a label.
+    store_image(
+        store,
+        conn,
+        "110042",
+        JPEG,
+        provenance=Provenance.MANUAL,
+        uploaded_by="alice@example.com",
+        max_dimension=1024,
+    )
+    store_image(store, conn, "110043", JPEG, provenance=Provenance.WIKIMEDIA, max_dimension=1024)
+
+    # provenance is the only attribute, so manual and wikimedia land on two separate series while
+    # the high-cardinality SKU and Uploader stay off the counter entirely.
+    attribute_sets = [attrs for attrs, _ in telemetry.points("fishpage.image.optimized")]
+    assert {"provenance": "manual"} in attribute_sets
+    assert {"provenance": "wikimedia"} in attribute_sets
+    assert all(set(attrs) == {"provenance"} for attrs in attribute_sets)
+
+
 def test_store_image_writes_nothing_when_the_input_cannot_be_decoded(tmp_path):
     store = FakeImageStore()
     conn = _seeded_conn(tmp_path)
@@ -170,6 +223,50 @@ def test_store_image_writes_nothing_when_the_input_cannot_be_decoded(tmp_path):
     # DB row pointing at bytes that can't be served.
     assert store.objects == {}
     assert image_for(conn, "110042") is None
+
+
+def test_store_image_counts_an_optimize_error_for_an_undecodable_input(tmp_path, telemetry):
+    store = FakeImageStore()
+    conn = _seeded_conn(tmp_path)
+
+    with pytest.raises(ImageDecodeError):
+        store_image(
+            store, conn, "110042", b"not an image", provenance=Provenance.MANUAL, max_dimension=1024
+        )
+
+    # A human uploading a bad file is expected, dashboard-only noise: the failure increments the
+    # optimize-error counter (attributed only by provenance) while still raising so nothing stores.
+    assert telemetry.counter("fishpage.image.optimize_errors") == 1
+    assert [attrs for attrs, _ in telemetry.points("fishpage.image.optimize_errors")] == [
+        {"provenance": "manual"}
+    ]
+
+
+def test_store_image_logs_the_detail_when_optimization_fails(tmp_path, caplog):
+    store = FakeImageStore()
+    conn = _seeded_conn(tmp_path)
+
+    with caplog.at_level(logging.WARNING, logger="fishpage"), pytest.raises(ImageDecodeError):
+        store_image(
+            store,
+            conn,
+            "110042",
+            b"not an image",
+            provenance=Provenance.MANUAL,
+            uploaded_by="alice@example.com",
+            max_dimension=1024,
+        )
+
+    # The counter stays cardinality-safe; the detail of which upload failed goes to the log. One
+    # WARNING carries the SKU, Uploader, and Provenance as structured fields plus the decode
+    # exception, so ops can see whose bad file failed without exploding the metric.
+    events = [r for r in caplog.records if getattr(r, "sku", None) == "110042"]
+    assert len(events) == 1
+    event = events[0]
+    assert event.levelno == logging.WARNING
+    assert event.uploader == "alice@example.com"
+    assert event.provenance == "manual"
+    assert event.exc_info is not None
 
 
 def test_uploading_an_image_stores_the_bytes_and_records_manual_provenance(tmp_path):

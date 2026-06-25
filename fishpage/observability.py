@@ -22,7 +22,7 @@ from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import date
-from typing import TextIO
+from typing import TYPE_CHECKING, TextIO
 
 from opentelemetry.metrics import CallbackOptions, Counter, Observation
 from opentelemetry.sdk.metrics import MeterProvider
@@ -32,6 +32,9 @@ from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor, SpanProcessor
 
 from fishpage.config import Settings
+
+if TYPE_CHECKING:
+    from fishpage.models import Provenance
 
 # Stamped on every signal so the app is identifiable as one service in Grafana, where traces,
 # metrics, and logs from many sources land together.
@@ -45,6 +48,10 @@ class _Instruments:
     rows_skipped: Counter
     reuse_flags: Counter
     monotonicity_skips: Counter
+    images_optimized: Counter
+    image_original_bytes: Counter
+    image_optimized_bytes: Counter
+    image_optimize_errors: Counter
 
 
 _meter_provider: MeterProvider
@@ -169,6 +176,31 @@ def record_monotonicity_skip() -> None:
     _instruments.monotonicity_skips.add(1)
 
 
+def record_image_optimized(bytes_in: int, bytes_out: int, *, provenance: Provenance) -> None:
+    """Record that one image flowed through the optimization seam.
+
+    Two separate byte counters rather than one "bytes saved": WebP can occasionally re-encode a
+    tiny source larger, and a monotonic counter can't carry a negative saving. Space saved and the
+    compression ratio are derived downstream from the two totals.
+
+    ``provenance`` (manual/wikimedia) is the only attribute; the SKU and Uploader are
+    high-cardinality and ride the log event, never a counter.
+    """
+    attributes = {"provenance": provenance.value}
+    _instruments.images_optimized.add(1, attributes)
+    _instruments.image_original_bytes.add(bytes_in, attributes)
+    _instruments.image_optimized_bytes.add(bytes_out, attributes)
+
+
+def record_image_optimize_error(*, provenance: Provenance) -> None:
+    """Record that one input failed to decode at the optimization seam.
+
+    Dashboard-only signal — a human uploading a bad file is expected noise, not an alert. The
+    detail of *which* upload failed rides the exception log; ``provenance`` is the only attribute.
+    """
+    _instruments.image_optimize_errors.add(1, {"provenance": provenance.value})
+
+
 def track_catalog_freshness(
     conn: sqlite3.Connection,
     *,
@@ -233,6 +265,26 @@ def _install(
             "fishpage.ingest.monotonicity_skips",
             unit="{drop}",
             description="Stocklist drops held back for not being newer than the catalog",
+        ),
+        images_optimized=meter.create_counter(
+            "fishpage.image.optimized",
+            unit="{image}",
+            description="Images put through the optimization seam",
+        ),
+        image_original_bytes=meter.create_counter(
+            "fishpage.image.original_bytes",
+            unit="By",
+            description="Total bytes of images before optimization",
+        ),
+        image_optimized_bytes=meter.create_counter(
+            "fishpage.image.optimized_bytes",
+            unit="By",
+            description="Total bytes of images after optimization",
+        ),
+        image_optimize_errors=meter.create_counter(
+            "fishpage.image.optimize_errors",
+            unit="{error}",
+            description="Images that failed to decode at the optimization seam",
         ),
     )
 

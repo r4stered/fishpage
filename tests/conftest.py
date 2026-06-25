@@ -5,6 +5,9 @@ test exercises the real recording path — parse a Stocklist, then read back the
 the domain code actually emitted — rather than asserting against a mock.
 """
 
+from collections.abc import Iterator
+from typing import Any
+
 import pytest
 from opentelemetry.sdk.metrics.export import InMemoryMetricReader
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor
@@ -18,30 +21,35 @@ class Telemetry:
         self._metric_reader = metric_reader
         self._spans = spans
 
-    def counter(self, name: str) -> float:
-        """The summed value recorded to the counter/gauge ``name`` across all attribute sets."""
-        total = 0.0
+    def _metrics(self) -> Iterator[Any]:
+        """Every recorded metric, flattening the resource/scope nesting the reader returns."""
         data = self._metric_reader.get_metrics_data()
         for resource in data.resource_metrics if data else []:
             for scope in resource.scope_metrics:
-                for metric in scope.metrics:
-                    if metric.name == name:
-                        # Counters and gauges report NumberDataPoints; histogram points (no
-                        # plain .value) are not among the instruments here.
-                        total += sum(
-                            getattr(point, "value", 0) for point in metric.data.data_points
-                        )
-        return total
+                yield from scope.metrics
+
+    def counter(self, name: str) -> float:
+        """The summed value recorded to the counter/gauge ``name`` across all attribute sets."""
+        # Counters and gauges report NumberDataPoints; histogram points (no plain .value) are not
+        # among the instruments here.
+        return sum((value for _, value in self.points(name)), 0.0)
+
+    def points(self, name: str) -> list[tuple[dict[str, object], float]]:
+        """Every data point recorded to ``name`` as an (attributes, value) pair.
+
+        Lets a test assert not just the recorded total but the attribute sets carrying it — the
+        cardinality discipline that keeps high-cardinality keys off a counter.
+        """
+        return [
+            (dict(point.attributes), getattr(point, "value", 0))
+            for metric in self._metrics()
+            if metric.name == name
+            for point in metric.data.data_points
+        ]
 
     def metric_names(self) -> set[str]:
         """The names of every metric that has at least one recorded data point."""
-        data = self._metric_reader.get_metrics_data()
-        return {
-            metric.name
-            for resource in (data.resource_metrics if data else [])
-            for scope in resource.scope_metrics
-            for metric in scope.metrics
-        }
+        return {metric.name for metric in self._metrics()}
 
     def span_names(self) -> list[str]:
         return [span.name for span in self._spans.get_finished_spans()]
