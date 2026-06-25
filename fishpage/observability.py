@@ -14,12 +14,15 @@ guarding on whether export is on.
 
 from __future__ import annotations
 
+import json
 import logging
 import sqlite3
+import sys
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import date
+from typing import TextIO
 
 from opentelemetry.metrics import CallbackOptions, Counter, Observation
 from opentelemetry.sdk.metrics import MeterProvider
@@ -84,6 +87,43 @@ def _export_logs_via_otlp() -> None:
     provider = LoggerProvider(resource=_RESOURCE)
     provider.add_log_record_processor(BatchLogRecordProcessor(OTLPLogExporter()))
     logging.getLogger().addHandler(LoggingHandler(logger_provider=provider))
+
+
+def configure_logging(settings: Settings, *, stream: TextIO | None = None) -> None:
+    """Raise the ``fishpage`` logger to INFO and render its records to ``stream`` as JSON.
+
+    The root logger defaults to WARNING, so every ``_log.info(...)`` the domain code emits is
+    dropped at the source before any handler — console or OTLP — can see it. Lifting the
+    ``fishpage`` logger's own level to INFO (overridable via ``LOG_LEVEL``) lets those records
+    through; raising it on the package logger rather than root keeps third-party noise quiet.
+    """
+    logger = logging.getLogger(_INSTRUMENTING_SCOPE)
+    logger.setLevel(settings.log_level)
+    handler = logging.StreamHandler(stream or sys.stderr)
+    handler.setFormatter(_JsonFormatter())
+    logger.handlers[:] = [handler]
+
+
+# The attributes the stdlib stamps on every record; anything else in a record's __dict__ arrived
+# through `extra={...}` at the call site and is promoted to a top-level JSON field.
+_STANDARD_RECORD_ATTRS = frozenset(vars(logging.makeLogRecord({})))
+
+
+class _JsonFormatter(logging.Formatter):
+    """Render a record as a single JSON line: the standard fields, the message, and any extras."""
+
+    def format(self, record: logging.LogRecord) -> str:
+        payload = {
+            "level": record.levelname,
+            "logger": record.name,
+            "message": record.getMessage(),
+        }
+        payload.update(
+            {k: v for k, v in record.__dict__.items() if k not in _STANDARD_RECORD_ATTRS}
+        )
+        if record.exc_info:
+            payload["exception"] = self.formatException(record.exc_info)
+        return json.dumps(payload, default=str)
 
 
 @contextmanager
