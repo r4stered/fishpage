@@ -13,6 +13,7 @@ from decimal import Decimal
 from pathlib import Path
 
 from fishpage import observability
+from fishpage.enricher import Difficulty, EnrichmentResult, PlantSafe, Temperament
 from fishpage.migrations import migrate
 from fishpage.models import Item
 
@@ -145,6 +146,83 @@ def all_items(conn: sqlite3.Connection, *, include_out_of_stock: bool = True) ->
         query += " WHERE qty_avail > 0"
     rows = conn.execute(query).fetchall()
     return [_row_to_item(row) for row in rows]
+
+
+def unenriched_items(conn: sqlite3.Connection) -> list[Item]:
+    """Every Item that has no enrichment row yet — the drainer's work queue.
+
+    Ingestion writes only to ``items``; the *absence* of an ``enrichment`` row is exactly what
+    marks a SKU un-enriched, so the queue is a left anti-join and needs no separate flag column.
+    Clearing a SKU's enrichment row (an on-demand re-enrich) drops it straight back into this set.
+    """
+    rows = conn.execute(
+        "SELECT i.sku, i.size, i.name, i.retail_price, i.special_price, i.qty_avail, "
+        "i.last_seen, i.reuse_flagged "
+        "FROM items i LEFT JOIN enrichment e ON e.sku = i.sku "
+        "WHERE e.sku IS NULL"
+    ).fetchall()
+    return [_row_to_item(row) for row in rows]
+
+
+def persist_enrichment(conn: sqlite3.Connection, sku: str, result: EnrichmentResult) -> None:
+    """Write one Item's AI-read species and care Classifiers into the ``enrichment`` table.
+
+    Upsert by SKU so a re-enrich overwrites the prior AI row in place. Only the AI-owned columns
+    are touched — the image columns are left as they are (the image pipeline owns those), and the
+    ``classifier_override`` table is never written here, so a human's ``manual`` value, which lives
+    there, is never clobbered by a re-enrich.
+    """
+    conn.execute(
+        "INSERT INTO enrichment "
+        "(sku, scientific_name, common_name, difficulty, temperament, plant_safe) "
+        "VALUES (:sku, :scientific_name, :common_name, :difficulty, :temperament, :plant_safe) "
+        "ON CONFLICT(sku) DO UPDATE SET "
+        "scientific_name = excluded.scientific_name, common_name = excluded.common_name, "
+        "difficulty = excluded.difficulty, temperament = excluded.temperament, "
+        "plant_safe = excluded.plant_safe",
+        {
+            "sku": sku,
+            "scientific_name": result.scientific_name,
+            "common_name": result.common_name,
+            "difficulty": result.difficulty.value,
+            "temperament": result.temperament.value,
+            "plant_safe": result.plant_safe.value,
+        },
+    )
+    conn.commit()
+
+
+def enrichment_for(conn: sqlite3.Connection, sku: str) -> EnrichmentResult | None:
+    """The persisted enrichment for one SKU, or ``None`` when it is still un-enriched."""
+    row = conn.execute(
+        "SELECT scientific_name, common_name, difficulty, temperament, plant_safe "
+        "FROM enrichment WHERE sku = ?",
+        (sku,),
+    ).fetchone()
+    if row is None:
+        return None
+    return EnrichmentResult(
+        scientific_name=row["scientific_name"],
+        common_name=row["common_name"],
+        difficulty=Difficulty(row["difficulty"]),
+        temperament=Temperament(row["temperament"]),
+        plant_safe=PlantSafe(row["plant_safe"]),
+    )
+
+
+def item_exists(conn: sqlite3.Connection, sku: str) -> bool:
+    """Whether ``sku`` names a stored Item — the guard the on-demand re-enrich route checks."""
+    return conn.execute("SELECT 1 FROM items WHERE sku = ?", (sku,)).fetchone() is not None
+
+
+def clear_enrichment(conn: sqlite3.Connection, sku: str) -> None:
+    """Drop a SKU's enrichment row, returning it to the un-enriched queue for a re-enrich.
+
+    Only the AI ``enrichment`` row goes; any ``manual`` ``classifier_override`` for the SKU stays,
+    so an on-demand re-enrich re-runs the AI pass without discarding a human correction.
+    """
+    conn.execute("DELETE FROM enrichment WHERE sku = ?", (sku,))
+    conn.commit()
 
 
 def _row_to_item(row: sqlite3.Row) -> Item:

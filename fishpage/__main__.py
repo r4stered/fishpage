@@ -11,7 +11,9 @@ same connection the app serves from, unless cloud ingestion is configured to dri
 
 import os
 import socket
+import sqlite3
 import threading
+from collections.abc import Callable
 
 import uvicorn
 
@@ -19,6 +21,8 @@ from fishpage import observability
 from fishpage.app import create_app
 from fishpage.boot import seed_if_empty
 from fishpage.config import Settings, load_settings
+from fishpage.drainer import run_drainer
+from fishpage.enricher import Enricher, select_enricher
 from fishpage.ingest import watch_incoming
 from fishpage.store import open_store
 
@@ -45,11 +49,39 @@ def build_app(settings: Settings):
             f"(every {settings.poll_interval:g}s)"
         )
 
+    if start_drainer(conn, settings) is not None:
+        print("Enrichment drainer running — filling un-enriched Items in the background")
+
     return create_app(
         conn,
         incoming_dir=settings.incoming_dir,
         processed_dir=settings.processed_dir,
     )
+
+
+def start_drainer(
+    conn: sqlite3.Connection,
+    settings: Settings,
+    *,
+    spawn: Callable[[sqlite3.Connection, Enricher], object] | None = None,
+) -> object | None:
+    """Start the background enrichment drainer when Enrichment is configured; otherwise do nothing.
+
+    Opt-in and default-off: with no flag or no key :func:`select_enricher` returns ``None``, so no
+    drainer thread is started — ``just run`` and the test suite start no background enrichment and
+    need no credential. ``spawn`` is injected so a test can assert the wiring decision without
+    launching a real thread; in production it defaults to a daemon thread running the drain loop.
+    """
+    enricher = select_enricher(settings)
+    if enricher is None:
+        return None
+    return (spawn or _spawn_drainer)(conn, enricher)
+
+
+def _spawn_drainer(conn: sqlite3.Connection, enricher: Enricher) -> threading.Thread:
+    thread = threading.Thread(target=run_drainer, args=(conn, enricher), daemon=True)
+    thread.start()
+    return thread
 
 
 def listening_socket(host: str, port: int) -> socket.socket:

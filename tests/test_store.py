@@ -2,9 +2,19 @@ from dataclasses import replace
 from datetime import date
 from decimal import Decimal
 
+from fishpage.enricher import Difficulty, EnrichmentResult, PlantSafe, Temperament
 from fishpage.migrations import MIGRATIONS, schema_version
 from fishpage.models import Item
-from fishpage.store import all_items, latest_stocklist_date, open_store, reconcile
+from fishpage.store import (
+    all_items,
+    clear_enrichment,
+    enrichment_for,
+    latest_stocklist_date,
+    open_store,
+    persist_enrichment,
+    reconcile,
+    unenriched_items,
+)
 
 JUN19 = date(2026, 6, 19)
 JUN26 = date(2026, 6, 26)
@@ -12,6 +22,14 @@ JUN26 = date(2026, 6, 26)
 ORNATE_M = Item("110042", "M", "Bichir Ornate", Decimal("28.99"), None, 15)
 LEAF = Item("110092", "-", "Leaf Fish Leopard Ctenopoma", Decimal("5.99"), Decimal("4.99"), 30)
 SOLD_OUT = Item("110200", "L", "Datnoid Indo", Decimal("89.99"), None, 0)
+
+ORNATE_ENRICHMENT = EnrichmentResult(
+    scientific_name="Polypterus ornatipinnis",
+    common_name="Ornate Bichir",
+    difficulty=Difficulty.INTERMEDIATE,
+    temperament=Temperament.SEMI_AGGRESSIVE,
+    plant_safe=PlantSafe.SAFE,
+)
 
 
 def test_the_store_opens_in_wal_mode_so_litestream_can_replicate(tmp_path):
@@ -67,3 +85,70 @@ def test_store_is_keyed_by_sku(tmp_path):
     stored = all_items(conn)
     assert {item.sku for item in stored} == {"110042", "110092"}
     assert len(stored) == 2
+
+
+def test_freshly_reconciled_skus_are_unenriched(tmp_path):
+    conn = open_store(tmp_path / "fishpage.db")
+
+    reconcile(conn, [ORNATE_M, LEAF], JUN19)
+
+    # Ingestion upserts items but writes no enrichment row, so every new SKU is un-enriched —
+    # that set is the drainer's work queue. The queue yields whole Items so the drainer has the
+    # trade name, Derived Category, and Size it feeds the enricher.
+    queued = unenriched_items(conn)
+    assert {item.sku for item in queued} == {"110042", "110092"}
+    assert any(item.name == "Bichir Ornate" for item in queued)
+
+
+def test_persisting_enrichment_removes_a_sku_from_the_queue(tmp_path):
+    conn = open_store(tmp_path / "fishpage.db")
+    reconcile(conn, [ORNATE_M, LEAF], JUN19)
+
+    persist_enrichment(conn, "110042", ORNATE_ENRICHMENT)
+
+    # Filling one SKU shrinks the queue to exactly the rest, and the persisted result reads back
+    # intact (species + Classifiers), while an unfilled SKU has no enrichment to read.
+    assert {item.sku for item in unenriched_items(conn)} == {"110092"}
+    assert enrichment_for(conn, "110042") == ORNATE_ENRICHMENT
+    assert enrichment_for(conn, "110092") is None
+
+
+def test_clearing_enrichment_requeues_the_sku(tmp_path):
+    conn = open_store(tmp_path / "fishpage.db")
+    reconcile(conn, [ORNATE_M, LEAF], JUN19)
+    persist_enrichment(conn, "110042", ORNATE_ENRICHMENT)
+    assert "110042" not in {item.sku for item in unenriched_items(conn)}
+
+    clear_enrichment(conn, "110042")
+
+    # An on-demand re-enrich clears the AI row, dropping the SKU back into the queue for a fresh
+    # pass; its enrichment reads back as gone.
+    assert "110042" in {item.sku for item in unenriched_items(conn)}
+    assert enrichment_for(conn, "110042") is None
+
+
+def test_persisting_enrichment_leaves_a_manual_override_intact(tmp_path):
+    conn = open_store(tmp_path / "fishpage.db")
+    reconcile(conn, [ORNATE_M], JUN19)
+    # A human corrected one Classifier: that ``manual`` value lives in classifier_override, the
+    # authoritative layer the drainer must never clobber.
+    conn.execute(
+        "INSERT INTO classifier_override (sku, key, value) VALUES (?, ?, ?)",
+        ("110042", "temperament", "peaceful"),
+    )
+    conn.commit()
+
+    # Re-enrich with a *different* AI temperament for the same SKU.
+    persist_enrichment(
+        conn, "110042", replace(ORNATE_ENRICHMENT, temperament=Temperament.AGGRESSIVE)
+    )
+
+    # The AI row updates, but the manual override survives untouched — it wins because it lives in
+    # a separate table the persist path never writes.
+    override = conn.execute(
+        "SELECT value FROM classifier_override WHERE sku = ? AND key = ?",
+        ("110042", "temperament"),
+    ).fetchone()
+    assert override["value"] == "peaceful"
+    reenriched = enrichment_for(conn, "110042")
+    assert reenriched is not None and reenriched.temperament is Temperament.AGGRESSIVE

@@ -12,7 +12,12 @@ from fishpage.browse import SIZE_GRADES, browse
 from fishpage.ingest import ingest_pending, stocklist_date
 from fishpage.models import Item
 from fishpage.render import render_catalog, render_grid, render_upload
-from fishpage.store import all_items, latest_stocklist_date
+from fishpage.store import (
+    all_items,
+    clear_enrichment,
+    item_exists,
+    latest_stocklist_date,
+)
 
 _STATIC = Path(__file__).parent / "static"
 
@@ -88,6 +93,16 @@ def create_app(
     @app.get("/healthz")
     def healthz() -> JSONResponse:
         return JSONResponse({"status": "ok"})
+
+    @app.post("/enrich/{sku}")
+    def reenrich(sku: str) -> JSONResponse:
+        # On-demand re-enrich: clear the SKU's AI row so it falls back into the un-enriched queue,
+        # where the background drainer refills it. Only the enrichment row goes — a human's manual
+        # override lives in a separate table and is left intact, so a correction survives a re-run.
+        if not item_exists(conn, sku):
+            return JSONResponse({"detail": f"unknown SKU {sku}"}, status_code=404)
+        clear_enrichment(conn, sku)
+        return JSONResponse({"sku": sku, "status": "queued"})
 
     @app.get("/catalog")
     def catalog(
