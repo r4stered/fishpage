@@ -31,6 +31,8 @@ class Settings:
     litestream_replica_url: str | None
     otel_endpoint: str | None
     cloud_ingestion: bool
+    enrichment_enabled: bool
+    anthropic_api_key: str | None
 
 
 def load_settings(env: Mapping[str, str]) -> Settings:
@@ -46,6 +48,8 @@ def load_settings(env: Mapping[str, str]) -> Settings:
         litestream_replica_url=env.get("LITESTREAM_REPLICA_URL"),
         otel_endpoint=env.get("OTEL_EXPORTER_OTLP_ENDPOINT"),
         cloud_ingestion=_flag(env.get("FISHPAGE_CLOUD_INGEST")),
+        enrichment_enabled=_flag(env.get("ENRICHMENT_ENABLED")),
+        anthropic_api_key=env.get("ANTHROPIC_API_KEY"),
     )
 
 

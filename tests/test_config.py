@@ -26,6 +26,8 @@ def test_cloud_dependencies_default_off_with_an_empty_environment():
     assert settings.litestream_replica_url is None
     assert settings.otel_endpoint is None
     assert settings.cloud_ingestion is False
+    assert settings.enrichment_enabled is False
+    assert settings.anthropic_api_key is None
 
 
 def test_local_defaults_apply_when_the_environment_is_empty():
@@ -80,6 +82,18 @@ def test_each_cloud_dependency_switches_on_from_its_environment_variable():
     assert settings.litestream_replica_url == "s3://fishpage/db"
     assert settings.otel_endpoint == "https://otel.example:4317"
     assert settings.cloud_ingestion is True
+
+
+def test_enrichment_switches_on_from_its_environment_variables():
+    settings = load_settings(
+        {
+            "ENRICHMENT_ENABLED": "1",
+            "ANTHROPIC_API_KEY": "sk-ant-test",
+        }
+    )
+
+    assert settings.enrichment_enabled is True
+    assert settings.anthropic_api_key == "sk-ant-test"
 
 
 def test_cloud_ingestion_flag_reads_common_truthy_and_falsy_spellings():
