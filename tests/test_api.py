@@ -4,12 +4,26 @@ from decimal import Decimal
 from fastapi.testclient import TestClient
 
 from fishpage.app import create_app
+from fishpage.enricher import Difficulty, EnrichmentResult, PlantSafe, Temperament
 from fishpage.models import Item
-from fishpage.store import open_store, reconcile
+from fishpage.store import (
+    enrichment_for,
+    open_store,
+    persist_enrichment,
+    reconcile,
+    unenriched_items,
+)
 
 JUN19 = date(2026, 6, 19)
 
 ORNATE_M = Item("110042", "M", "Bichir Ornate", Decimal("28.99"), None, 15)
+AN_ENRICHMENT = EnrichmentResult(
+    scientific_name="Polypterus ornatipinnis",
+    common_name="Ornate Bichir",
+    difficulty=Difficulty.INTERMEDIATE,
+    temperament=Temperament.SEMI_AGGRESSIVE,
+    plant_safe=PlantSafe.SAFE,
+)
 LEAF = Item("110092", "-", "Leaf Fish Leopard Ctenopoma", Decimal("5.99"), Decimal("4.99"), 30)
 SOLD_OUT = Item("110200", "L", "Datnoid Indo", Decimal("89.99"), None, 0)
 
@@ -56,6 +70,30 @@ def test_healthz_reports_ok(tmp_path):
     # Fly's Machine health check pings this; a 200 with a tiny body is all it needs.
     assert resp.status_code == 200
     assert resp.json() == {"status": "ok"}
+
+
+def test_reenrich_route_clears_the_row_and_requeues_the_sku(tmp_path):
+    conn = open_store(tmp_path / "fishpage.db")
+    reconcile(conn, [ORNATE_M, LEAF], JUN19)
+    persist_enrichment(conn, "110042", AN_ENRICHMENT)
+    app_client = TestClient(create_app(conn))
+    assert "110042" not in {item.sku for item in unenriched_items(conn)}
+
+    resp = app_client.post("/enrich/110042")
+
+    # The on-demand route clears just that SKU's AI row, dropping it back into the drainer's queue
+    # for a fresh pass — the background drainer takes it from there.
+    assert resp.status_code == 200
+    assert enrichment_for(conn, "110042") is None
+    assert "110042" in {item.sku for item in unenriched_items(conn)}
+
+
+def test_reenrich_route_404s_an_unknown_sku(tmp_path):
+    resp = client(tmp_path).post("/enrich/999999")
+
+    # Re-queuing presupposes a real Item; an unknown SKU is a 404, not a silent no-op that would
+    # read as success.
+    assert resp.status_code == 404
 
 
 def test_requests_are_auto_instrumented_with_a_server_span(tmp_path, telemetry):
