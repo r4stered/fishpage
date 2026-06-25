@@ -81,6 +81,14 @@ variable "fly_deploy_token" {
   description = "Fly deploy token set as the FLY_API_TOKEN GitHub Actions secret so CD can deploy. Mint with `fly tokens create deploy`."
 }
 
+# --- Enrichment ---
+
+variable "anthropic_api_key" {
+  type        = string
+  sensitive   = true
+  description = "Anthropic API key the enricher calls Claude with, pushed to Fly as the ANTHROPIC_API_KEY secret. With ENRICHMENT_ENABLED (fly.toml) it switches the AI care classifiers on. Supplied via TF_VAR_anthropic_api_key; never written to a file. Mint at console.anthropic.com."
+}
+
 # --- Grafana Cloud ---
 
 variable "grafana_cloud_stack_slug" {

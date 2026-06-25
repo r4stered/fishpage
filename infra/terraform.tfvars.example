@@ -1,7 +1,7 @@
 # Copy to terraform.tfvars (gitignored) and fill in the ~6 non-secret blanks. Secrets do NOT go here:
 # they are exported into the environment by `just bootstrap` (see infra/README.md):
 #   CLOUDFLARE_API_TOKEN, GITHUB_TOKEN, GRAFANA_CLOUD_ACCESS_POLICY_TOKEN, GRAFANA_AUTH,
-#   TF_VAR_fly_deploy_token, TF_VAR_state_encryption_passphrase.
+#   TF_VAR_fly_deploy_token, TF_VAR_state_encryption_passphrase, TF_VAR_anthropic_api_key.
 
 # --- Cloudflare ---
 cloudflare_account_id = "0123456789abcdef0123456789abcdef"

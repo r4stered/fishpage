@@ -1,7 +1,8 @@
 # The derived secrets the bring-up wrapper pipes into `flyctl secrets set` — the machine-to-machine
 # half of "no secret is hand-copied". `fly_secrets` is a single map so the wrapper can set them in one
-# `flyctl secrets set` call; the rest are conveniences for verification. Everything here is sensitive
-# because it is built from minted tokens.
+# `flyctl secrets set` call; the rest are conveniences for verification. Everything here is sensitive:
+# most entries are built from minted tokens, and ANTHROPIC_API_KEY is the one externally-supplied key
+# passed straight through (var.anthropic_api_key) so it still rides the single secrets import.
 
 # R2's S3-compatible API: the Access Key ID is the token's id; the Secret Access Key is the SHA-256 of
 # the token's value. Both are deterministic from the token, so they never appear in a dashboard.
@@ -34,6 +35,7 @@ output "fly_secrets" {
     CLOUDFLARE_TUNNEL_TOKEN      = data.cloudflare_zero_trust_tunnel_cloudflared_token.fishpage.token
     OTEL_EXPORTER_OTLP_ENDPOINT  = local.otlp_endpoint
     OTEL_EXPORTER_OTLP_HEADERS   = local.otlp_headers
+    ANTHROPIC_API_KEY            = var.anthropic_api_key
   }
 }
 

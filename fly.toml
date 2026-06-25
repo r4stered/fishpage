@@ -41,6 +41,11 @@ primary_region = "sjc"
   # alongside the auth header OTEL_EXPORTER_OTLP_HEADERS (Authorization=Basic <base64>); with no
   # endpoint the exporter is a no-op and this value is inert.
   OTEL_EXPORTER_OTLP_PROTOCOL = "http/protobuf"
+  # Enrichment: the background drainer calls Claude to fill in care classifiers. This opt-in flag is
+  # non-secret config; the key it pairs with is a Fly secret, never committed: ANTHROPIC_API_KEY.
+  # Both are needed — with the flag off, or no key, the enricher is never constructed and the drainer
+  # no-ops, so the catalog still serves manually-entered values.
+  ENRICHMENT_ENABLED = "true"
 
 # A single Machine that never auto-stops. There is deliberately no [http_service] or
 # [[services]] block: those publish to a public IP, which is exactly what this slice must not do.
