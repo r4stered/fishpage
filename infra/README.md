@@ -54,7 +54,8 @@ plus the vendors' own installers on Linux; `wrangler` is an npm global, so Node.
 3. **Secrets** → `.env` at the repo root (copy from `.env.example`). `just` auto-loads it, so you
    never `export` anything by hand; each slot is labelled with what the token is and where to mint
    it. `.env` is gitignored and never committed. It holds the Cloudflare / GitHub / Grafana provider
-   tokens, the R2 state-bucket S3 keys, the Fly deploy token, and the state-encryption passphrase.
+   tokens, the R2 state-bucket S3 keys, the Fly deploy token, the Anthropic key the enricher calls
+   Claude with, and the state-encryption passphrase.
 
    Authenticate the `flyctl` CLI for bootstrap with `fly auth login` (a deploy token can create the
    app's secrets and deploys but cannot run `apps create`). Do not put `FLY_API_TOKEN` in `.env`.

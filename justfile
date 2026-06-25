@@ -90,7 +90,7 @@ rollback sha:
 # backend read from the environment:
 #   CLOUDFLARE_API_TOKEN GITHUB_TOKEN GRAFANA_CLOUD_ACCESS_POLICY_TOKEN GRAFANA_AUTH
 #   AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY            # R2 state-bucket S3 keys
-#   TF_VAR_fly_deploy_token TF_VAR_state_encryption_passphrase
+#   TF_VAR_fly_deploy_token TF_VAR_state_encryption_passphrase TF_VAR_anthropic_api_key
 # plus an authenticated flyctl (FLY_API_TOKEN or `fly auth login`). See infra/README.md.
 
 # macOS uses Homebrew; Linux uses the distro package manager for jq and the vendors' own installers
@@ -185,7 +185,7 @@ _bootstrap-preflight:
     done
     for v in CLOUDFLARE_API_TOKEN GITHUB_TOKEN GRAFANA_CLOUD_ACCESS_POLICY_TOKEN GRAFANA_AUTH \
              AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY TF_VAR_fly_deploy_token \
-             TF_VAR_state_encryption_passphrase; do
+             TF_VAR_state_encryption_passphrase TF_VAR_anthropic_api_key; do
         [[ -n "${!v:-}" ]] || missing+=("$v")
     done
     [[ -f infra/terraform.tfvars ]] || missing+=("infra/terraform.tfvars (copy from .example)")
