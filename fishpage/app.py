@@ -3,23 +3,27 @@
 import sqlite3
 from pathlib import Path
 
-from fastapi import FastAPI, Header, UploadFile
+from fastapi import FastAPI, Form, Header, Query, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from fishpage import observability
 from fishpage.browse import SIZE_GRADES, browse
+from fishpage.catalog import build_cards, filter_cards_by_classifiers
 from fishpage.images import ImageDecodeError, ImageStore, store_image
 from fishpage.ingest import ingest_pending, stocklist_date
 from fishpage.models import Item, Provenance
 from fishpage.render import render_catalog, render_grid, render_upload
 from fishpage.store import (
+    all_classifier_overrides,
+    all_enrichments,
+    all_images,
     all_items,
     clear_enrichment,
     image_for,
     item_exists,
     latest_stocklist_date,
-    skus_with_images,
+    set_classifier_override,
 )
 
 _STATIC = Path(__file__).parent / "static"
@@ -136,6 +140,21 @@ def create_app(
             return Response(status_code=404)
         return Response(content=stored.data, media_type=stored.content_type)
 
+    @app.post("/items/{sku}/classifier")
+    def override_classifier(sku: str, key: str = Form(...), value: str = Form(...)) -> Response:
+        # A human correction: write a manual override that wins on read and survives re-enrichment.
+        # The value is validated against the curated vocabulary, so an out-of-vocabulary correction
+        # is a 400 rather than a stored value the catalog could never have produced itself.
+        if not item_exists(conn, sku):
+            return JSONResponse({"detail": f"unknown SKU {sku}"}, status_code=404)
+        try:
+            set_classifier_override(conn, sku, key, value)
+        except ValueError as exc:
+            return JSONResponse({"detail": str(exc)}, status_code=400)
+        # Post/redirect/get back to the catalog so the form lands on the refreshed grid — the card
+        # now shows the manual badge — without re-posting on reload, and works with no JS.
+        return RedirectResponse(url="/", status_code=303)
+
     @app.get("/healthz")
     def healthz() -> JSONResponse:
         return JSONResponse({"status": "ok"})
@@ -150,6 +169,18 @@ def create_app(
         clear_enrichment(conn, sku)
         return JSONResponse({"sku": sku, "status": "queued"})
 
+    def _filtered_cards(items: list[Item], selected_classifiers: dict[str, set[str]]) -> list:
+        # Resolve every visible Item's Classifiers from one batch read each, then apply the
+        # Classifier facets on the *resolved* values — so a manual override is what a chip filters
+        # on, exactly as it is what a badge shows.
+        cards = build_cards(
+            items,
+            enrichments=all_enrichments(conn),
+            images=all_images(conn),
+            overrides=all_classifier_overrides(conn),
+        )
+        return filter_cards_by_classifiers(cards, selected_classifiers)
+
     @app.get("/catalog")
     def catalog(
         include_out_of_stock: bool = False,
@@ -158,6 +189,9 @@ def create_app(
         on_special: bool = False,
         search: str = "",
         sort: str = "",
+        difficulty: list[str] = Query(default=[]),
+        temperament: list[str] = Query(default=[]),
+        plant_safe: list[str] = Query(default=[]),
     ) -> JSONResponse:
         items = all_items(conn, include_out_of_stock=include_out_of_stock)
         items = browse(
@@ -168,7 +202,13 @@ def create_app(
             search=search,
             sort=sort,
         )
-        return JSONResponse([_item_dict(item) for item in items])
+        selected = {
+            "difficulty": set(difficulty),
+            "temperament": set(temperament),
+            "plant_safe": set(plant_safe),
+        }
+        cards = _filtered_cards(items, selected)
+        return JSONResponse([_item_dict(card.item) for card in cards])
 
     @app.get("/", response_class=HTMLResponse)
     def index(
@@ -178,6 +218,9 @@ def create_app(
         on_special: bool = False,
         search: str = "",
         sort: str = "",
+        difficulty: list[str] = Query(default=[]),
+        temperament: list[str] = Query(default=[]),
+        plant_safe: list[str] = Query(default=[]),
         hx_request: str | None = Header(default=None),
     ) -> HTMLResponse:
         # Load the whole catalog once: the dropdown lists every category regardless of the
@@ -195,16 +238,21 @@ def create_app(
             search=search,
             sort=sort,
         )
+        selected_classifiers = {
+            "difficulty": set(difficulty),
+            "temperament": set(temperament),
+            "plant_safe": set(plant_safe),
+        }
+        cards = _filtered_cards(items, selected_classifiers)
         # One route, header-sniffed: an HTMX filter change swaps just the grid fragment in place,
         # while a hard navigation to the same URL renders the whole page. The pushed URL and the
         # reloadable URL are identical because both go through here.
-        image_skus = skus_with_images(conn)
         images_enabled = image_store is not None
         if hx_request:
-            return HTMLResponse(render_grid(items, image_skus, images_enabled=images_enabled))
+            return HTMLResponse(render_grid(cards, images_enabled=images_enabled))
         return HTMLResponse(
             render_catalog(
-                items,
+                cards,
                 include_out_of_stock=include_out_of_stock,
                 categories=categories,
                 selected_category=category,
@@ -213,7 +261,7 @@ def create_app(
                 on_special=on_special,
                 search=search,
                 sort=sort,
-                image_skus=image_skus,
+                selected_classifiers=selected_classifiers,
                 images_enabled=images_enabled,
             )
         )

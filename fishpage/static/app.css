@@ -340,3 +340,119 @@ a {
   border-left-color: var(--text);
   font-weight: 600;
 }
+
+/* Care Classifiers as compact badges. Provenance reads structurally within the single-accent
+   palette: a human-corrected value is a solid accent outline (authoritative), an AI guess a quiet
+   dashed one (best-effort), so the two are distinguishable without spending a second hue. */
+.card .badges {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+
+.card .badge {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.3rem;
+  padding: 0.15rem 0.5rem;
+  font-size: 0.72rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+}
+
+.card .badge .badge-label {
+  color: var(--muted);
+}
+
+.card .badge .badge-value {
+  font-weight: 600;
+}
+
+.card .badge .provenance-marker {
+  font-size: 0.58rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--muted);
+}
+
+.card .badge.provenance-manual {
+  border-color: var(--accent);
+}
+
+.card .badge.provenance-manual .provenance-marker {
+  color: var(--accent);
+}
+
+.card .badge.provenance-ai-generated {
+  border-style: dashed;
+}
+
+/* The photographer credit a sourced image is licence-bound to show — small and muted, under it. */
+.card .image-credit {
+  margin: 0;
+  font-size: 0.68rem;
+  color: var(--muted);
+}
+
+/* The inline per-Classifier correction: a quiet collapsible footer, pinned to the card bottom so it
+   never competes with the price/qty data that drives the order. */
+.card .overrides {
+  margin-top: auto;
+  padding-top: 0.6rem;
+  border-top: 1px solid var(--border);
+  font-size: 0.75rem;
+}
+
+.card .overrides summary {
+  cursor: pointer;
+  color: var(--muted);
+}
+
+.card .classifier-override {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.4rem;
+  margin-top: 0.4rem;
+}
+
+.card .classifier-override label {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 0.15rem;
+  color: var(--muted);
+}
+
+.card .classifier-override select {
+  font: inherit;
+  font-size: 0.75rem;
+}
+
+/* Classifier filter chips: each enum value a small toggle, grouped per Classifier inside the same
+   filter bar as the other controls so a change re-filters through the one HTMX form. */
+.filters .chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem 0.6rem;
+  margin: 0;
+  padding: 0.3rem 0.6rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.filters .chips legend {
+  padding: 0 0.3rem;
+  font-size: 0.7rem;
+  color: var(--muted);
+}
+
+.filters .chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.75rem;
+  white-space: nowrap;
+}

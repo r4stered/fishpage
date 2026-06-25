@@ -13,6 +13,7 @@ from decimal import Decimal
 from pathlib import Path
 
 from fishpage import observability
+from fishpage.catalog import classifier_spec
 from fishpage.enricher import Difficulty, EnrichmentResult, PlantSafe, Temperament
 from fishpage.migrations import migrate
 from fishpage.models import ImageRecord, Item, Provenance
@@ -192,15 +193,10 @@ def persist_enrichment(conn: sqlite3.Connection, sku: str, result: EnrichmentRes
     conn.commit()
 
 
-def enrichment_for(conn: sqlite3.Connection, sku: str) -> EnrichmentResult | None:
-    """The persisted enrichment for one SKU, or ``None`` when it is still un-enriched."""
-    row = conn.execute(
-        "SELECT scientific_name, common_name, difficulty, temperament, plant_safe "
-        "FROM enrichment WHERE sku = ?",
-        (sku,),
-    ).fetchone()
-    if row is None:
-        return None
+_ENRICHMENT_COLUMNS = "scientific_name, common_name, difficulty, temperament, plant_safe"
+
+
+def _row_to_enrichment(row: sqlite3.Row) -> EnrichmentResult:
     return EnrichmentResult(
         scientific_name=row["scientific_name"],
         common_name=row["common_name"],
@@ -208,6 +204,21 @@ def enrichment_for(conn: sqlite3.Connection, sku: str) -> EnrichmentResult | Non
         temperament=Temperament(row["temperament"]),
         plant_safe=PlantSafe(row["plant_safe"]),
     )
+
+
+def enrichment_for(conn: sqlite3.Connection, sku: str) -> EnrichmentResult | None:
+    """The persisted enrichment for one SKU, or ``None`` when it is still un-enriched."""
+    row = conn.execute(
+        f"SELECT {_ENRICHMENT_COLUMNS} FROM enrichment WHERE sku = ?", (sku,)
+    ).fetchone()
+    return None if row is None else _row_to_enrichment(row)
+
+
+def all_enrichments(conn: sqlite3.Connection) -> dict[str, EnrichmentResult]:
+    """Every persisted AI row keyed by SKU — the grid resolves all visible cards' Classifiers from
+    one read. An un-enriched SKU is simply absent from the mapping."""
+    rows = conn.execute(f"SELECT sku, {_ENRICHMENT_COLUMNS} FROM enrichment").fetchall()
+    return {row["sku"]: _row_to_enrichment(row) for row in rows}
 
 
 def attach_image(
@@ -246,14 +257,10 @@ def attach_image(
     conn.commit()
 
 
-def image_for(conn: sqlite3.Connection, sku: str) -> ImageRecord | None:
-    """The persisted image metadata for one SKU, or ``None`` when it has no image."""
-    row = conn.execute(
-        "SELECT object_key, license, attribution, source_url, provenance FROM image WHERE sku = ?",
-        (sku,),
-    ).fetchone()
-    if row is None:
-        return None
+_IMAGE_COLUMNS = "object_key, license, attribution, source_url, provenance"
+
+
+def _row_to_image(row: sqlite3.Row) -> ImageRecord:
     return ImageRecord(
         object_key=row["object_key"],
         license=row["license"],
@@ -263,9 +270,60 @@ def image_for(conn: sqlite3.Connection, sku: str) -> ImageRecord | None:
     )
 
 
+def image_for(conn: sqlite3.Connection, sku: str) -> ImageRecord | None:
+    """The persisted image metadata for one SKU, or ``None`` when it has no image."""
+    row = conn.execute(f"SELECT {_IMAGE_COLUMNS} FROM image WHERE sku = ?", (sku,)).fetchone()
+    return None if row is None else _row_to_image(row)
+
+
+def all_images(conn: sqlite3.Connection) -> dict[str, ImageRecord]:
+    """Every image record keyed by SKU — the grid reads each card's proxy key and attribution in
+    one query. A SKU with no image is absent from the mapping."""
+    rows = conn.execute(f"SELECT sku, {_IMAGE_COLUMNS} FROM image").fetchall()
+    return {row["sku"]: _row_to_image(row) for row in rows}
+
+
 def skus_with_images(conn: sqlite3.Connection) -> set[str]:
     """The SKUs with a stored image — the catalog uses these to pick proxy over placeholder."""
     return {row["sku"] for row in conn.execute("SELECT sku FROM image")}
+
+
+def set_classifier_override(conn: sqlite3.Connection, sku: str, key: str, value: str) -> None:
+    """Record a human correction to one Classifier, upserting by ``(sku, key)``.
+
+    The row's presence *is* ``manual`` Provenance and wins on read; re-enrichment never touches this
+    table, so the correction is structurally un-clobberable. ``key`` and ``value`` are validated
+    against the curated vocabulary first, so an out-of-vocabulary override can never reach the
+    catalog — the same guarantee the AI path gets from its constrained schema.
+    """
+    spec = classifier_spec(key)
+    if spec is None or value not in spec.choices:
+        raise ValueError(f"{value!r} is not a valid value for Classifier {key!r}")
+    conn.execute(
+        "INSERT INTO classifier_override (sku, key, value) VALUES (:sku, :key, :value) "
+        "ON CONFLICT(sku, key) DO UPDATE SET value = excluded.value",
+        {"sku": sku, "key": key, "value": value},
+    )
+    conn.commit()
+
+
+def classifier_overrides_for(conn: sqlite3.Connection, sku: str) -> dict[str, str]:
+    """The human Classifier corrections for one SKU, keyed by Classifier — empty when there are
+    none. Each entry resolves to ``manual`` Provenance on read."""
+    rows = conn.execute(
+        "SELECT key, value FROM classifier_override WHERE sku = ?", (sku,)
+    ).fetchall()
+    return {row["key"]: row["value"] for row in rows}
+
+
+def all_classifier_overrides(conn: sqlite3.Connection) -> dict[str, dict[str, str]]:
+    """Every human Classifier correction, grouped by SKU into the ``{key: value}`` shape
+    ``resolve_classifiers`` takes — so the grid derives manual Provenance for all cards in one read.
+    A SKU with no corrections is absent from the outer mapping."""
+    grouped: dict[str, dict[str, str]] = {}
+    for row in conn.execute("SELECT sku, key, value FROM classifier_override"):
+        grouped.setdefault(row["sku"], {})[row["key"]] = row["value"]
+    return grouped
 
 
 def item_exists(conn: sqlite3.Connection, sku: str) -> bool:

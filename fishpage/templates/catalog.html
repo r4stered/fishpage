@@ -44,8 +44,19 @@
         <option value="price_desc"{% if sort == "price_desc" %} selected{% endif %}>Price: high to low</option>
       </select>
     </label>
+    {% for spec in classifiers %}
+    <fieldset class="chips">
+      <legend>{{ spec.label }}</legend>
+      {% for choice in spec.choices %}
+      <label class="chip">
+        <input type="checkbox" name="{{ spec.key }}" value="{{ choice }}"{% if choice in selected_classifiers.get(spec.key, []) %} checked{% endif %}>
+        {{ choice }}
+      </label>
+      {% endfor %}
+    </fieldset>
+    {% endfor %}
     <button class="button" type="submit">Apply</button>
   </form>
-  <p>{{ items|length }} Items</p>
+  <p>{{ cards|length }} Items</p>
   {% include "_grid.html" %}
 {% endblock %}

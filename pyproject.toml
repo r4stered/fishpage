@@ -50,3 +50,8 @@ line-length = 100
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "B", "UP", "SIM", "RUF"]
+
+[tool.ruff.lint.flake8-bugbear]
+# FastAPI's parameter markers are evaluated once at import as the route's dependency spec, not as a
+# real mutable default — the documented idiom. Header/Form are already exempt by default; add Query.
+extend-immutable-calls = ["fastapi.Query"]

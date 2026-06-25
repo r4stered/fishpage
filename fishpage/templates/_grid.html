@@ -1,8 +1,12 @@
 <ul class="catalog-grid">
-  {% for item in items %}
-  <li class="card" data-sku="{{ item.sku }}">
-    {% if item.sku in image_skus %}
+  {% for card in cards %}
+  {% set item = card.item %}
+  <li class="card" id="card-{{ item.sku }}" data-sku="{{ item.sku }}">
+    {% if card.image %}
     <img class="image" src="/items/{{ item.sku }}/image" alt="{{ item.name }}">
+    {% if card.image.attribution %}
+    <p class="image-credit">Image credit: {{ card.image.attribution }}</p>
+    {% endif %}
     {% else %}
     <img class="placeholder" src="/static/placeholder.svg" alt="placeholder image for {{ item.name }}">
     {% endif %}
@@ -13,12 +17,40 @@
     <span class="special-price">special ${{ item.special_price }}</span>
     {% endif %}
     <span class="qty">{{ item.qty_avail }} available</span>
+    {% if card.classifiers %}
+    <ul class="badges">
+      {% for c in card.classifiers %}
+      <li class="badge provenance-{{ c.provenance.value }}" data-classifier="{{ c.key }}" title="{{ c.label }} — {{ 'human-corrected' if c.provenance.value == 'manual' else 'AI-generated, best-effort' }}">
+        <span class="badge-label">{{ c.label }}</span>
+        <span class="badge-value">{{ c.value }}</span>
+        <span class="provenance-marker">{{ 'manual' if c.provenance.value == 'manual' else 'ai-generated' }}</span>
+      </li>
+      {% endfor %}
+    </ul>
+    {% endif %}
     {% if images_enabled %}
     <form class="image-upload" action="/items/{{ item.sku }}/image" method="post" enctype="multipart/form-data">
       <input type="file" name="file" accept="image/*" required>
       <button type="submit">Add image</button>
     </form>
     {% endif %}
+    <details class="overrides">
+      <summary>Correct care info</summary>
+      {% for spec in classifiers %}
+      {% set current = card.values.get(spec.key) %}
+      <form class="classifier-override" action="/items/{{ item.sku }}/classifier" method="post">
+        <input type="hidden" name="key" value="{{ spec.key }}">
+        <label>{{ spec.label }}
+          <select name="value">
+            {% for choice in spec.choices %}
+            <option value="{{ choice }}"{% if choice == current %} selected{% endif %}>{{ choice }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <button type="submit">Save</button>
+      </form>
+      {% endfor %}
+    </details>
   </li>
   {% endfor %}
 </ul>

@@ -11,12 +11,39 @@ from decimal import Decimal
 from fastapi.testclient import TestClient
 
 from fishpage.app import create_app
-from fishpage.models import Item
+from fishpage.catalog import build_cards
+from fishpage.models import ImageRecord, Item, Provenance
 from fishpage.render import render_grid
 from fishpage.store import open_store, reconcile
 
 JUN19 = date(2026, 6, 19)
 ORNATE_M = Item("110042", "M", "Bichir Ornate", Decimal("28.99"), None, 15)
+
+
+def _cards(items, *, images=None, enrichments=None, overrides=None):
+    """Build the Card bundles render_grid now takes, from raw Items plus optional enrichment,
+    image, and override maps — the same join the route does, so a unit test drives the real path."""
+    return build_cards(
+        items,
+        enrichments=enrichments or {},
+        images=images or {},
+        overrides=overrides or {},
+    )
+
+
+def _image_record(
+    object_key: str = "img/x.webp",
+    *,
+    attribution: str | None = None,
+    provenance: Provenance = Provenance.MANUAL,
+) -> ImageRecord:
+    return ImageRecord(
+        object_key=object_key,
+        license=None,
+        attribution=attribution,
+        source_url=None,
+        provenance=provenance,
+    )
 
 
 def _client(tmp_path):
@@ -45,20 +72,21 @@ def test_both_pages_carry_the_responsive_viewport_from_the_shared_head(tmp_path)
 def test_grid_partial_renders_cards_without_page_chrome():
     leaf = Item("110092", "-", "Leaf Fish", Decimal("5.99"), Decimal("4.99"), 30)
 
-    html = render_grid([ORNATE_M, leaf])
+    html = render_grid(_cards([ORNATE_M, leaf]))
 
     # The partial is just the grid of cards — one per Item, with the special-price badge where
     # there is one — so the HTMX path can swap it in on its own.
     assert html.count('data-sku="110042"') == 1
     assert html.count('data-sku="110092"') == 1
     assert '<span class="special-price">special $4.99</span>' in html
-    # It carries none of the surrounding page: no document shell, no filter form.
+    # It carries none of the surrounding page: no document shell, no filter form. (Per-card
+    # override forms are part of a card and so do belong in the partial.)
     assert "<!doctype" not in html.lower()
-    assert "<form" not in html
+    assert 'class="filters"' not in html
 
 
 def test_a_card_with_a_stored_image_points_at_the_proxy_route():
-    html = render_grid([ORNATE_M], image_skus={"110042"})
+    html = render_grid(_cards([ORNATE_M], images={"110042": _image_record()}))
 
     # The card's image is served from the app's own proxy route — never a public bucket URL — so it
     # stays behind the Access edge. The placeholder is replaced for an Item that has an image.
@@ -67,7 +95,7 @@ def test_a_card_with_a_stored_image_points_at_the_proxy_route():
 
 
 def test_a_card_without_an_image_falls_back_to_the_placeholder():
-    html = render_grid([ORNATE_M])
+    html = render_grid(_cards([ORNATE_M]))
 
     # An un-enriched, image-less Item still renders — the placeholder stands in until one is added.
     assert "placeholder.svg" in html
@@ -75,7 +103,7 @@ def test_a_card_without_an_image_falls_back_to_the_placeholder():
 
 
 def test_cards_offer_a_manual_upload_form_when_images_are_enabled():
-    html = render_grid([ORNATE_M], images_enabled=True)
+    html = render_grid(_cards([ORNATE_M]), images_enabled=True)
 
     # The manual upload path: a multipart form per card posting an image file to the SKU's route,
     # working without JavaScript (plain action/method, not HTMX-only).
@@ -86,7 +114,7 @@ def test_cards_offer_a_manual_upload_form_when_images_are_enabled():
 
 
 def test_cards_hide_the_upload_form_when_images_are_disabled():
-    html = render_grid([ORNATE_M])
+    html = render_grid(_cards([ORNATE_M]))
 
     # With no image bucket configured the form would only 503, so it is not offered at all.
     assert 'action="/items/110042/image"' not in html
@@ -130,7 +158,7 @@ def test_index_returns_only_the_grid_partial_for_an_htmx_request(tmp_path):
     html = resp.text
     assert 'data-sku="110042"' in html
     assert "<!doctype" not in html.lower()
-    assert "<form" not in html
+    assert 'class="filters"' not in html
 
 
 def test_index_returns_the_full_page_without_the_htmx_header(tmp_path):
@@ -200,3 +228,93 @@ def test_upload_page_links_the_same_stylesheet(tmp_path):
     # The upload page extends the same base layout, so it pulls in the one stylesheet too —
     # styling is shared, not re-declared per page.
     assert html.count('<link rel="stylesheet" href="/static/app.css">') == 1
+
+
+def test_cards_render_classifier_badges_marked_by_provenance():
+    from fishpage.enricher import Difficulty, EnrichmentResult, PlantSafe, Temperament
+
+    enrichment = EnrichmentResult(
+        scientific_name=None,
+        common_name=None,
+        difficulty=Difficulty.ADVANCED,  # AI read, overridden below
+        temperament=Temperament.PEACEFUL,  # AI read, stands
+        plant_safe=PlantSafe.UNKNOWN,  # honest gap, no badge
+    )
+    html = render_grid(
+        _cards(
+            [ORNATE_M],
+            enrichments={"110042": enrichment},
+            overrides={"110042": {"difficulty": "beginner"}},
+        )
+    )
+
+    # The overridden value shows as a manual badge; the un-overridden AI value as an ai-generated
+    # one — visibly distinguished so a buyer reads human fact apart from best-effort guess.
+    assert 'class="badge provenance-manual"' in html
+    assert ">beginner<" in html
+    assert 'class="badge provenance-ai-generated"' in html
+    assert ">peaceful<" in html
+    # The honest gap (unknown plant-safe) gets no badge — the card degrades, never shows "unknown".
+    assert "unknown" not in html
+    # The two provenances carry a visible, distinct marker, not just a CSS hook a sighted buyer
+    # can't see.
+    assert "ai-generated" in html and "manual" in html
+    assert html.count("provenance-ai-generated") >= 1
+
+
+def test_a_sourced_image_shows_its_attribution_credit():
+    sourced = _image_record(attribution="A. Photographer", provenance=Provenance.WIKIMEDIA)
+    html = render_grid(_cards([ORNATE_M], images={"110042": sourced}))
+
+    # A sourced image carries a licensing obligation: the photographer must be credited on the card.
+    assert "A. Photographer" in html
+    assert "credit" in html.lower()
+
+
+def test_a_manual_image_shows_no_attribution_credit():
+    html = render_grid(_cards([ORNATE_M], images={"110042": _image_record()}))
+
+    # A human-uploaded image has no external photographer to credit, so no credit line is drawn.
+    assert "credit" not in html.lower()
+
+
+def test_each_card_offers_an_inline_override_form_per_classifier():
+    from fishpage.enricher import Difficulty, EnrichmentResult, PlantSafe, Temperament
+
+    enrichment = EnrichmentResult(
+        None, None, Difficulty.ADVANCED, Temperament.PEACEFUL, PlantSafe.UNKNOWN
+    )
+    html = render_grid(_cards([ORNATE_M], enrichments={"110042": enrichment}))
+
+    # A human can correct any Classifier inline: one no-JS form per Classifier, posting the chosen
+    # value to the SKU's override route. The forms exist even for the unknown plant-safe attribute,
+    # so a buyer can fill a gap the model left.
+    assert html.count('action="/items/110042/classifier" method="post"') == 3
+    for key in ("difficulty", "temperament", "plant_safe"):
+        assert f'<input type="hidden" name="key" value="{key}">' in html
+    assert '<select name="value">' in html
+    # The select offers the curated vocabulary minus the unknown hatch — a human picks a real value.
+    for choice in ("beginner", "intermediate", "advanced"):
+        assert f'<option value="{choice}"' in html
+    assert '<option value="unknown"' not in html
+
+
+def test_the_override_select_preselects_the_current_resolved_value():
+    from fishpage.enricher import Difficulty, EnrichmentResult, PlantSafe, Temperament
+
+    enrichment = EnrichmentResult(
+        None, None, Difficulty.ADVANCED, Temperament.PEACEFUL, PlantSafe.SAFE
+    )
+    html = render_grid(_cards([ORNATE_M], enrichments={"110042": enrichment}))
+
+    # The currently-resolved value is the selected option, so opening the control shows the buyer
+    # what is in force before they change it.
+    assert '<option value="advanced" selected' in html
+
+
+def test_each_card_carries_a_stable_id_for_targeted_swaps():
+    html = render_grid(_cards([ORNATE_M]))
+
+    # A stable per-card id leaves the seam the live-update poll and lazy/pagination work build on:
+    # an individually-addressable card for an out-of-band swap, without a whole-grid re-render.
+    assert 'id="card-110042"' in html
