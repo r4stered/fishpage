@@ -127,6 +127,11 @@ def _classifier[C: StrEnum](enum: type[C], value: object) -> C:
 class Enricher(Protocol):
     """The injectable spine: resolve one Item's species and care Classifiers."""
 
+    @property
+    def model(self) -> str:
+        """The model identifier the drainer tags each call's telemetry with."""
+        ...
+
     def enrich(self, trade_name: str, *, category: str, size: str) -> EnrichmentResult: ...
 
 
@@ -144,6 +149,10 @@ class ClaudeEnricher:
     def __init__(self, client: _MessagesClient, *, model: str = DEFAULT_MODEL):
         self._client = client
         self._model = model
+
+    @property
+    def model(self) -> str:
+        return self._model
 
     def enrich(self, trade_name: str, *, category: str, size: str) -> EnrichmentResult:
         response = self._client.messages.create(
