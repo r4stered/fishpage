@@ -8,7 +8,7 @@ from fishpage.app import create_app
 from fishpage.enricher import Difficulty, EnrichmentResult, PlantSafe, Temperament
 from fishpage.models import Item
 from fishpage.store import (
-    classifier_overrides_for,
+    all_classifier_overrides,
     enrichment_for,
     open_store,
     persist_enrichment,
@@ -138,68 +138,19 @@ def test_browsing_gets_emit_no_per_request_actor_log(tmp_path, caplog):
 
     # Browsing is deliberately not attributed per request: high-volume actor logging on GETs
     # duplicates what Cloudflare Access's own edge audit logs capture better. Even with an Access
-    # header present, a catalog read and an index render emit no actor-bearing event.
+    # header present, an index render emits no actor-bearing event.
     with caplog.at_level(logging.INFO, logger="fishpage"):
         app_client.get("/", headers={"Cf-Access-Authenticated-User-Email": "alice@example.com"})
-        app_client.get(
-            "/catalog", headers={"Cf-Access-Authenticated-User-Email": "alice@example.com"}
-        )
 
     assert [r for r in caplog.records if getattr(r, "actor", None) is not None] == []
 
 
 def test_requests_are_auto_instrumented_with_a_server_span(tmp_path, telemetry):
-    client(tmp_path).get("/catalog")
+    client(tmp_path).get("/")
 
     # FastAPI is auto-instrumented, so every request produces a server span carrying the route —
     # the spine each manual parse/ingest span hangs off in a trace.
-    assert any("/catalog" in name for name in telemetry.span_names())
-
-
-def test_catalog_defaults_to_in_stock_with_shape(tmp_path):
-    resp = client(tmp_path).get("/catalog")
-
-    assert resp.status_code == 200
-    items = {item["sku"]: item for item in resp.json()}
-    # Default view is In stock only: the qty-0 Datnoid is absent.
-    assert set(items) == {"110042", "110092"}
-
-    ornate = items["110042"]
-    assert ornate == {
-        "sku": "110042",
-        "size": "M",
-        "name": "Bichir Ornate",
-        "retail_price": "28.99",
-        "special_price": None,
-        "qty_avail": 15,
-        "category": "Monster/Oddball",
-    }
-    assert items["110092"]["special_price"] == "4.99"
-
-
-def test_catalog_includes_out_of_stock_when_toggled(tmp_path):
-    resp = client(tmp_path).get("/catalog", params={"include_out_of_stock": "true"})
-
-    items = {item["sku"]: item for item in resp.json()}
-    assert set(items) == {"110042", "110092", "110200"}
-    assert items["110200"]["qty_avail"] == 0
-
-
-def test_catalog_reflects_reconciled_state_after_reingest(tmp_path):
-    conn = open_store(tmp_path / "fishpage.db")
-    reconcile(conn, [ORNATE_M, LEAF], JUN19)
-
-    # A second Stocklist: ORNATE_M is cheaper and scarcer, LEAF is gone.
-    repriced = Item("110042", "M", "Bichir Ornate", Decimal("24.99"), None, 2)
-    reconcile(conn, [repriced], date(2026, 6, 26))
-
-    # The zeroed absentee only surfaces with the out-of-stock view turned on.
-    resp = TestClient(create_app(conn)).get("/catalog", params={"include_out_of_stock": "true"})
-    items = {item["sku"]: item for item in resp.json()}
-
-    assert items["110042"]["retail_price"] == "24.99"
-    assert items["110042"]["qty_avail"] == 2
-    assert items["110092"]["qty_avail"] == 0  # absentee zeroed, still served
+    assert any(name.endswith("/") for name in telemetry.span_names())
 
 
 def test_index_links_to_the_upload_page(tmp_path):
@@ -265,44 +216,6 @@ def test_index_renders_one_card_per_item(tmp_path):
     assert '<span class="special-price">special $4.99</span>' in html
 
 
-def test_catalog_json_carries_each_items_category(tmp_path):
-    items = {i["sku"]: i for i in categorized_client(tmp_path).get("/catalog").json()}
-
-    assert items["120091"]["category"] == "Angelfish"
-    assert items["110042"]["category"] == "Monster/Oddball"
-
-
-def test_catalog_filters_by_category(tmp_path):
-    resp = categorized_client(tmp_path).get("/catalog", params={"category": "Monster/Oddball"})
-
-    # Only the two block-11 oddballs come back; the Angelfish and Barb are excluded.
-    assert {i["sku"] for i in resp.json()} == {"110042", "110092"}
-
-
-def test_catalog_fuzzy_searches_by_name(tmp_path):
-    resp = searchable_client(tmp_path).get("/catalog", params={"search": "angel koi"})
-
-    # "angel koi" finds the Angelfish Koi by partial, order-free token match; the other
-    # Angelfish and the Barb are left out.
-    assert {i["sku"] for i in resp.json()} == {"120093"}
-
-
-def test_catalog_search_orders_by_relevance(tmp_path):
-    conn = open_store(tmp_path / "fishpage.db")
-    exact = Item("120094", "M", "Angel Koi", Decimal("14.99"), None, 5)
-    reconcile(conn, [ANGEL_KOI, exact], JUN19)
-    resp = TestClient(create_app(conn)).get("/catalog", params={"search": "angel koi"})
-
-    # The exact "Angel Koi" outranks the partial "Angelfish Koi" in the JSON order.
-    assert [i["sku"] for i in resp.json()] == ["120094", "120093"]
-
-
-def test_catalog_without_search_returns_everything(tmp_path):
-    resp = searchable_client(tmp_path).get("/catalog")
-
-    assert {i["sku"] for i in resp.json()} == {"120091", "120093", "170011"}
-
-
 def test_index_has_search_box_reflecting_the_active_term(tmp_path):
     html = searchable_client(tmp_path).get("/", params={"search": "angel koi"}).text
 
@@ -350,64 +263,6 @@ def test_index_filters_grid_by_category(tmp_path):
     assert 'data-sku="110042"' not in html  # oddball excluded
     # The chosen category is reflected as the selected option.
     assert '<option value="Barb" selected' in html
-
-
-def test_catalog_filters_by_size(tmp_path):
-    resp = client(tmp_path).get("/catalog", params={"size": "M"})
-
-    # Only the M-grade Bichir comes back; the "-" Leaf and the L Datnoid are excluded.
-    assert {i["sku"] for i in resp.json()} == {"110042"}
-
-
-def test_catalog_filters_to_on_special_only(tmp_path):
-    resp = client(tmp_path).get("/catalog", params={"on_special": "true"})
-
-    # Only the Leaf carries a special price; the retail-only Bichir drops out.
-    assert {i["sku"] for i in resp.json()} == {"110092"}
-
-
-def test_catalog_sorts_by_effective_price_ascending(tmp_path):
-    resp = client(tmp_path).get("/catalog", params={"sort": "price_asc"})
-
-    # The Leaf's special (4.99) is below the Bichir's retail (28.99), so it leads.
-    assert [i["sku"] for i in resp.json()] == ["110092", "110042"]
-
-
-def test_catalog_sorts_by_effective_price_descending(tmp_path):
-    resp = client(tmp_path).get("/catalog", params={"sort": "price_desc"})
-
-    assert [i["sku"] for i in resp.json()] == ["110042", "110092"]
-
-
-def test_catalog_combines_category_size_and_on_special(tmp_path):
-    resp = combo_client(tmp_path).get(
-        "/catalog", params={"category": "Angelfish", "size": "M", "on_special": "true"}
-    )
-
-    # Of the M Angelfish, only the in-stock one with a special survives all three filters:
-    # the S Angelfish, the non-special M Koi, the off-category Barb, and the out-of-stock
-    # M (zeroed, hidden by the default in-stock view) all drop out.
-    assert {i["sku"] for i in resp.json()} == {"120095"}
-
-
-def test_catalog_combines_category_filter_with_effective_price_sort(tmp_path):
-    resp = combo_client(tmp_path).get(
-        "/catalog", params={"category": "Angelfish", "sort": "price_asc"}
-    )
-
-    # Barb excluded by category; the three in-stock Angelfish come back cheapest-first by
-    # effective price: Marble's special 7.00, then Full Black 9.99, then Koi 12.99.
-    assert [i["sku"] for i in resp.json()] == ["120095", "120091", "120093"]
-
-
-def test_catalog_combines_out_of_stock_toggle_with_on_special(tmp_path):
-    resp = combo_client(tmp_path).get(
-        "/catalog", params={"include_out_of_stock": "true", "on_special": "true"}
-    )
-
-    # With out-of-stock included, both special-priced Angelfish surface — including the
-    # zeroed Zebra that the default view would hide.
-    assert {i["sku"] for i in resp.json()} == {"120095", "120096"}
 
 
 def test_index_size_dropdown_filters_on_change(tmp_path):
@@ -535,7 +390,7 @@ def test_classifier_override_route_records_a_manual_correction(tmp_path):
     # on the refreshed catalog via post/redirect/get so a reload does not re-submit.
     assert resp.status_code == 303
     assert resp.headers["location"] == "/"
-    assert classifier_overrides_for(conn, "110042") == {"difficulty": "beginner"}
+    assert all_classifier_overrides(conn) == {"110042": {"difficulty": "beginner"}}
 
 
 def test_classifier_override_shows_on_the_card_as_manual(tmp_path):
@@ -608,7 +463,7 @@ def test_classifier_override_route_400s_a_value_outside_the_vocabulary(tmp_path)
     # An out-of-vocabulary value is rejected at the door, never persisted — the catalog can only
     # ever hold curated Classifier values.
     assert resp.status_code == 400
-    assert classifier_overrides_for(conn, "110042") == {}
+    assert all_classifier_overrides(conn) == {}
 
 
 def test_accepted_override_increments_the_counter_tagged_by_classifier(tmp_path, telemetry):
@@ -652,26 +507,6 @@ def _enriched_client(tmp_path):
         EnrichmentResult(None, None, Difficulty.ADVANCED, Temperament.AGGRESSIVE, PlantSafe.UNSAFE),
     )
     return conn, TestClient(create_app(conn))
-
-
-def test_catalog_filters_by_a_classifier_facet(tmp_path):
-    _conn, app_client = _enriched_client(tmp_path)
-
-    resp = app_client.get("/catalog", params={"difficulty": "beginner"})
-
-    # Only the beginner Item survives the Classifier facet; the advanced one drops out.
-    assert {i["sku"] for i in resp.json()} == {"110042"}
-
-
-def test_catalog_classifier_facet_respects_a_manual_override(tmp_path):
-    _conn, app_client = _enriched_client(tmp_path)
-    # A human corrects the advanced Item down to beginner.
-    app_client.post("/items/110092/classifier", data={"key": "difficulty", "value": "beginner"})
-
-    resp = app_client.get("/catalog", params={"difficulty": "beginner"})
-
-    # The override is what the facet matches now: both Items read beginner on resolve.
-    assert {i["sku"] for i in resp.json()} == {"110042", "110092"}
 
 
 def test_index_filters_grid_by_a_classifier_facet(tmp_path):

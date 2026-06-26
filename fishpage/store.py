@@ -344,15 +344,6 @@ def set_classifier_override(conn: sqlite3.Connection, sku: str, key: str, value:
     conn.commit()
 
 
-def classifier_overrides_for(conn: sqlite3.Connection, sku: str) -> dict[str, str]:
-    """The human Classifier corrections for one SKU, keyed by Classifier — empty when there are
-    none. Each entry resolves to ``manual`` Provenance on read."""
-    rows = conn.execute(
-        "SELECT key, value FROM classifier_override WHERE sku = ?", (sku,)
-    ).fetchall()
-    return {row["key"]: row["value"] for row in rows}
-
-
 def all_classifier_overrides(conn: sqlite3.Connection) -> dict[str, dict[str, str]]:
     """Every human Classifier correction, grouped by SKU into the ``{key: value}`` shape
     ``resolve_classifiers`` takes — so the grid derives manual Provenance for all cards in one read.
