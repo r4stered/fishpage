@@ -5,6 +5,7 @@ the catalog back — rather than reaching into the trigger internals. The core's
 monotonicity, and no-row guards are exercised through ``ingest_pending`` here, not re-tested.
 """
 
+import logging
 from datetime import date
 from decimal import Decimal
 
@@ -70,6 +71,39 @@ def test_upload_runs_pdf_through_ingest_and_catalog_reconciles(tmp_path):
     assert list((tmp_path / "incoming").glob("*.pdf")) == []
     # The result page confirms what landed.
     assert "Freshwater_Stocklist_6-26-26.pdf" in resp.text
+
+
+def test_a_successful_upload_emits_an_audit_event_crediting_the_access_actor(tmp_path, caplog):
+    _, client = _client(tmp_path)  # empty catalog
+    name = "Freshwater_Stocklist_6-26-26.pdf"
+
+    with caplog.at_level(logging.INFO, logger="fishpage"):
+        client.post(
+            "/upload",
+            files={"file": (name, SAMPLE_PDF_BYTES, "application/pdf")},
+            headers={"Cf-Access-Authenticated-User-Email": "alice@example.com"},
+        )
+
+    # A Stocklist landing through the HTTP route narrates itself as one INFO event carrying the file
+    # name under the uniform actor field, so it joins the same actor query as overrides and
+    # re-enrichments. A rejected upload writes nothing, so the event marks success.
+    events = [r for r in caplog.records if getattr(r, "file", None) == name]
+    assert len(events) == 1
+    assert events[0].actor == "alice@example.com"
+
+
+def test_a_successful_upload_off_the_access_edge_credits_the_neutral_placeholder(tmp_path, caplog):
+    _, client = _client(tmp_path)
+    name = "Freshwater_Stocklist_6-26-26.pdf"
+
+    # No Access header — a local run or the cloud trigger before Access. The ingest still succeeds
+    # and the audit event credits the neutral placeholder rather than going anonymous.
+    with caplog.at_level(logging.INFO, logger="fishpage"):
+        _post_pdf(client, name)
+
+    events = [r for r in caplog.records if getattr(r, "file", None) == name]
+    assert len(events) == 1
+    assert events[0].actor == "unknown"
 
 
 def test_upload_rejects_undated_file_without_touching_catalog(tmp_path):
