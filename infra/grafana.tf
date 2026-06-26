@@ -97,3 +97,198 @@ resource "grafana_rule_group" "stale_catalog" {
     }
   }
 }
+
+# --- Site overview dashboard (stack-scoped) ---
+
+# One dashboard answering "is the system healthy right now" at a glance, sat in the same Fishpage
+# folder as the alert and provisioned the same way. Four panels: who uploaded what lately (Loki),
+# the optimization metrics and their derived savings (Prometheus), anything that logged at WARNING
+# or worse (Loki), and the catalog-freshness gauge the alert already keys on.
+#
+# Two datasource boundaries are wired here, both stack built-ins shared with the alert above:
+#   - grafanacloud-prom — the Prometheus store the OTLP metrics land in.
+#   - grafanacloud-logs — the Loki store the OTLP log records land in, selected by the resource's
+#     service.name (`{service_name="fishpage"}`).
+#
+# OTLP→Prometheus name rewriting (the same boundary the alert documents): Grafana Cloud rewrites
+# dots to underscores. Unit and `_total` suffixing is *off* on this stack — the freshness gauge
+# proves it, arriving bare as `fishpage_catalog_days_since_last_ingest` despite its `d` unit. The
+# same switch governs counter `_total` suffixes, so the #94 image counters are queried bare too:
+# `fishpage_image_optimized`, `fishpage_image_original_bytes`, `fishpage_image_optimized_bytes`,
+# `fishpage_image_optimize_errors`. The single `provenance` attribute carries through as a label.
+#
+# The upload event and the decode-failure warning are the two log records `store_image` emits; both
+# carry `actor`, `sku`, and `provenance` as record attributes. The INFO upload event is the one
+# whose message reads "Stored <provenance> image for <sku>"; the WARNING reads "Failed to optimize…".
+resource "grafana_dashboard" "overview" {
+  provider = grafana.stack
+  folder   = grafana_folder.fishpage.uid
+
+  config_json = jsonencode({
+    uid           = "fishpage-overview"
+    title         = "Fishpage — site overview"
+    tags          = ["fishpage"]
+    editable      = true
+    schemaVersion = 39
+    timezone      = "browser"
+    time          = { from = "now-24h", to = "now" }
+    refresh       = "1m"
+    templating    = { list = [] }
+    annotations   = { list = [] }
+
+    panels = [
+      # 1 — Recent image uploads: the INFO upload event, newest first. The "when + by who" view —
+      # time, uploader (the `actor` attribute), sku, and provenance read off the event's attributes.
+      # `|= "Stored"` keeps this to the success event and excludes the "Failed to optimize" warning.
+      {
+        id         = 1
+        type       = "logs"
+        title      = "Recent image uploads"
+        datasource = { type = "loki", uid = "grafanacloud-logs" }
+        gridPos    = { h = 8, w = 24, x = 0, y = 0 }
+        targets = [{
+          refId      = "A"
+          datasource = { type = "loki", uid = "grafanacloud-logs" }
+          queryType  = "range"
+          expr       = "{service_name=\"fishpage\"} |= `Stored` |= `image for`"
+        }]
+        options = {
+          showTime         = true
+          showLabels       = true
+          wrapLogMessage   = true
+          enableLogDetails = true
+          sortOrder        = "Descending"
+        }
+      },
+
+      # 2 — Metrics: uploads by provenance, the bytes-in/bytes-out flow with a derived "space saved"
+      # series, and the optimize-error count — all over the dashboard window. Bytes are the panel's
+      # default unit; the count series (uploads, errors) are overridden onto the right axis as plain
+      # counts. "Space saved" is derived here (in − out), never stored, because a per-image saving
+      # can be negative and a monotonic counter cannot carry that.
+      {
+        id         = 2
+        type       = "timeseries"
+        title      = "Image optimization"
+        datasource = { type = "prometheus", uid = "grafanacloud-prom" }
+        gridPos    = { h = 9, w = 16, x = 0, y = 8 }
+        targets = [
+          {
+            refId        = "uploads"
+            datasource   = { type = "prometheus", uid = "grafanacloud-prom" }
+            expr         = "sum by (provenance) (increase(fishpage_image_optimized[$__rate_interval]))"
+            legendFormat = "uploads {{provenance}}"
+            range        = true
+          },
+          {
+            refId        = "bytes_in"
+            datasource   = { type = "prometheus", uid = "grafanacloud-prom" }
+            expr         = "sum(increase(fishpage_image_original_bytes[$__rate_interval]))"
+            legendFormat = "bytes in"
+            range        = true
+          },
+          {
+            refId        = "bytes_out"
+            datasource   = { type = "prometheus", uid = "grafanacloud-prom" }
+            expr         = "sum(increase(fishpage_image_optimized_bytes[$__rate_interval]))"
+            legendFormat = "bytes out"
+            range        = true
+          },
+          {
+            refId        = "space_saved"
+            datasource   = { type = "prometheus", uid = "grafanacloud-prom" }
+            expr         = "sum(increase(fishpage_image_original_bytes[$__rate_interval])) - sum(increase(fishpage_image_optimized_bytes[$__rate_interval]))"
+            legendFormat = "space saved"
+            range        = true
+          },
+          {
+            refId        = "errors"
+            datasource   = { type = "prometheus", uid = "grafanacloud-prom" }
+            expr         = "sum(increase(fishpage_image_optimize_errors[$__rate_interval]))"
+            legendFormat = "optimize errors"
+            range        = true
+          },
+        ]
+        fieldConfig = {
+          defaults = {
+            unit   = "bytes"
+            custom = { drawStyle = "line", fillOpacity = 10, showPoints = "auto" }
+          }
+          overrides = [{
+            matcher = { id = "byRegexp", options = "/^(uploads|optimize errors).*/" }
+            properties = [
+              { id = "unit", value = "short" },
+              { id = "custom.axisPlacement", value = "right" },
+              { id = "custom.drawStyle", value = "bars" },
+            ]
+          }]
+        }
+        options = {
+          legend  = { displayMode = "table", placement = "bottom", calcs = ["sum"] }
+          tooltip = { mode = "multi", sort = "desc" }
+        }
+      },
+
+      # 4 — Catalog freshness: the same gauge and threshold the stale-catalog alert keys on, shown as
+      # a number that goes green under two days and red at two-or-more (one missed nightly ingest is
+      # not yet alarming, two is). No value at all means a never-ingested catalog or a dead exporter.
+      {
+        id         = 3
+        type       = "stat"
+        title      = "Catalog freshness (days since last ingest)"
+        datasource = { type = "prometheus", uid = "grafanacloud-prom" }
+        gridPos    = { h = 9, w = 8, x = 16, y = 8 }
+        targets = [{
+          refId      = "A"
+          datasource = { type = "prometheus", uid = "grafanacloud-prom" }
+          expr       = "max(fishpage_catalog_days_since_last_ingest)"
+          instant    = true
+        }]
+        fieldConfig = {
+          defaults = {
+            unit     = "d"
+            decimals = 1
+            thresholds = {
+              mode = "absolute"
+              steps = [
+                { color = "green", value = null },
+                { color = "red", value = 2 },
+              ]
+            }
+          }
+          overrides = []
+        }
+        options = {
+          colorMode     = "value"
+          graphMode     = "area"
+          textMode      = "value"
+          reduceOptions = { calcs = ["lastNotNull"] }
+        }
+      },
+
+      # 3 — Warnings & errors: everything the app logged at WARNING or worse — decode failures, the
+      # reuse-guard flag line, drainer exceptions. Filtered on the level Grafana Cloud derives for the
+      # OTLP records (`detected_level`), newest first.
+      {
+        id         = 4
+        type       = "logs"
+        title      = "Warnings & errors"
+        datasource = { type = "loki", uid = "grafanacloud-logs" }
+        gridPos    = { h = 9, w = 24, x = 0, y = 17 }
+        targets = [{
+          refId      = "A"
+          datasource = { type = "loki", uid = "grafanacloud-logs" }
+          queryType  = "range"
+          expr       = "{service_name=\"fishpage\"} | detected_level =~ `warn|error|critical|fatal`"
+        }]
+        options = {
+          showTime         = true
+          showLabels       = true
+          wrapLogMessage   = true
+          enableLogDetails = true
+          sortOrder        = "Descending"
+        }
+      },
+    ]
+  })
+}
