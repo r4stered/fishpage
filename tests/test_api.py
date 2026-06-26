@@ -17,6 +17,7 @@ from fishpage.store import (
 )
 
 JUN19 = date(2026, 6, 19)
+JUN26 = date(2026, 6, 26)
 
 ORNATE_M = Item("110042", "M", "Bichir Ornate", Decimal("28.99"), None, 15)
 AN_ENRICHMENT = EnrichmentResult(
@@ -350,6 +351,56 @@ def test_index_filters_grid_to_on_special(tmp_path):
     assert 'data-sku="120095"' in html  # in-stock special
     assert 'data-sku="120091"' not in html  # no special, excluded
     assert 'data-sku="120096"' not in html  # special but out of stock, hidden by default
+
+
+# A brand-new SKU appearing only in the second Stocklist, alongside ORNATE_M which carries over.
+NEWCOMER = Item("110500", "M", "Pleco Zebra", Decimal("44.99"), None, 8)
+
+
+def weekly_client(tmp_path):
+    # Two ingests: ORNATE_M and LEAF land in week one, then week two carries ORNATE_M over and
+    # introduces NEWCOMER. Only NEWCOMER is first-seen in the latest Stocklist — new this week.
+    conn = open_store(tmp_path / "fishpage.db")
+    reconcile(conn, [ORNATE_M, LEAF], JUN19)
+    reconcile(conn, [ORNATE_M, NEWCOMER], JUN26)
+    return TestClient(create_app(conn))
+
+
+def _new_only_input(html):
+    start = html.index('<input type="checkbox" name="new_only"')
+    return html[start : html.index(">", start) + 1]
+
+
+def test_index_badges_only_items_new_in_the_latest_stocklist(tmp_path):
+    html = weekly_client(tmp_path).get("/").text
+
+    # The newcomer's card carries the badge; the carried-over Item's does not.
+    assert html.count('class="badge-new"') == 1
+    newcomer_card = html[html.index('data-sku="110500"') :]
+    carried_card = html[html.index('data-sku="110042"') : html.index('data-sku="110500"')]
+    assert "badge-new" in newcomer_card
+    assert "badge-new" not in carried_card
+
+
+def test_index_filters_grid_to_new_this_week(tmp_path):
+    html = weekly_client(tmp_path).get("/", params={"new_only": "true"}).text
+
+    assert 'data-sku="110500"' in html  # first-seen this week
+    assert 'data-sku="110042"' not in html  # carried over, not new
+
+
+def test_index_new_only_toggle_is_bound_off_by_default_and_checked_when_active(tmp_path):
+    off = _new_only_input(weekly_client(tmp_path).get("/").text)
+    on = _new_only_input(weekly_client(tmp_path).get("/", params={"new_only": "true"}).text)
+
+    assert "checked" not in off
+    assert "checked" in on
+
+
+def test_index_sort_dropdown_offers_newest_first(tmp_path):
+    html = weekly_client(tmp_path).get("/", params={"sort": "newest"}).text
+
+    assert '<option value="newest" selected' in html
 
 
 def test_index_sorts_grid_by_effective_price(tmp_path):

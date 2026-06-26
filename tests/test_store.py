@@ -76,8 +76,9 @@ def test_items_round_trip_through_sqlite(tmp_path):
     reconcile(conn, [ORNATE_M, LEAF], JUN19)
     stored = {item.sku: item for item in all_items(conn)}
 
-    assert stored["110042"] == replace(ORNATE_M, last_seen=JUN19)
-    assert stored["110092"] == replace(LEAF, last_seen=JUN19)
+    # A first ingest stamps both last_seen and first_seen with the run date.
+    assert stored["110042"] == replace(ORNATE_M, last_seen=JUN19, first_seen=JUN19)
+    assert stored["110092"] == replace(LEAF, last_seen=JUN19, first_seen=JUN19)
 
 
 def test_all_items_excludes_out_of_stock_when_asked(tmp_path):

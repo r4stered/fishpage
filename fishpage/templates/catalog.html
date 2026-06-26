@@ -22,6 +22,10 @@
       On special only
     </label>
     <label>
+      <input type="checkbox" name="new_only" value="true"{% if new_only %} checked{% endif %}>
+      New this week only
+    </label>
+    <label>
       Category
       <select name="category">
         <option value="">All categories</option>
@@ -43,6 +47,7 @@
       Sort
       <select name="sort">
         <option value=""{% if not sort %} selected{% endif %}>Default</option>
+        <option value="newest"{% if sort == "newest" %} selected{% endif %}>Newest first</option>
         <option value="price_asc"{% if sort == "price_asc" %} selected{% endif %}>Price: low to high</option>
         <option value="price_desc"{% if sort == "price_desc" %} selected{% endif %}>Price: high to low</option>
       </select>
