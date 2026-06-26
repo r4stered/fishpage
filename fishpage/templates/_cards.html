@@ -1,0 +1,62 @@
+{% for card in cards %}
+{% set item = card.item %}
+<li class="card" id="card-{{ item.sku }}" data-sku="{{ item.sku }}">
+  {% if card.image %}
+  <img class="image" src="/items/{{ item.sku }}/image" alt="{{ item.name }}" loading="lazy">
+  {% if card.image.attribution %}
+  <p class="image-credit">Image credit: {{ card.image.attribution }}</p>
+  {% endif %}
+  {% else %}
+  <img class="placeholder" src="/static/placeholder.svg" alt="placeholder image for {{ item.name }}" loading="lazy">
+  {% endif %}
+  <h2 class="name">{{ item.name }}</h2>
+  <span class="size">{{ item.size }}</span>
+  <span class="retail-price">${{ item.retail_price }}</span>
+  {% if item.special_price is not none %}
+  <span class="special-price">special ${{ item.special_price }}</span>
+  {% endif %}
+  <span class="qty">{{ item.qty_avail }} available</span>
+  {% if card.classifiers %}
+  <ul class="badges">
+    {% for c in card.classifiers %}
+    <li class="badge provenance-{{ c.provenance.value }}" data-classifier="{{ c.key }}" title="{{ c.label }}: {{ c.value.replace('_', ' ') }} — {{ 'human-corrected' if c.provenance.value == 'manual' else 'AI-generated, best-effort' }}">
+      <span class="badge-label">{{ c.label }}</span>
+      <span class="badge-value">{{ c.value.replace('_', ' ') }}</span>
+      <span class="provenance-marker">{{ 'edited' if c.provenance.value == 'manual' else 'AI' }}</span>
+    </li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+  {% if images_enabled %}
+  <form class="image-upload" action="/items/{{ item.sku }}/image" method="post" enctype="multipart/form-data">
+    <input type="file" name="file" accept="image/*" required>
+    <button type="submit">Add image</button>
+  </form>
+  {% endif %}
+  <details class="overrides">
+    <summary>Correct care info</summary>
+    {% for spec in classifiers %}
+    {% set current = card.values.get(spec.key) %}
+    <form class="classifier-override" action="/items/{{ item.sku }}/classifier" method="post">
+      <input type="hidden" name="key" value="{{ spec.key }}">
+      <label>{{ spec.label }}
+        <select name="value">
+          {% for choice in spec.choices %}
+          <option value="{{ choice }}"{% if choice == current %} selected{% endif %}>{{ choice.replace('_', ' ') }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <button type="submit">Save</button>
+    </form>
+    {% endfor %}
+  </details>
+</li>
+{% endfor %}
+{% if has_more %}
+{# Infinite-scroll sentinel: HTMX appends the next window when it nears the viewport. With no JS the
+   inner link is a plain, reloadable navigation to the same canonical page URL — windowing degrades
+   to numbered pages rather than hiding the rest of the catalog. #}
+<li class="load-more" hx-get="{{ next_url }}" hx-trigger="revealed" hx-swap="outerHTML">
+  <a href="{{ next_url }}">Load more</a>
+</li>
+{% endif %}

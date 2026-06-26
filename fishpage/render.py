@@ -12,16 +12,46 @@ _env = Environment(
 )
 
 
-def render_grid(cards: list[Card], *, images_enabled: bool = False) -> str:
-    """Render just the grid of Item cards, the fragment shared by the full catalog page and the
-    HTMX swap. The page includes the same partial, so both paths emit identical card markup.
+def render_grid(
+    cards: list[Card],
+    *,
+    images_enabled: bool = False,
+    has_more: bool = False,
+    next_url: str = "",
+) -> str:
+    """Render the whole ``<ul>`` grid: one window of Item cards plus, when ``has_more``, the
+    load-more sentinel. This is the fragment the full catalog page includes and the fragment an
+    HTMX filter change swaps in, so both paths emit identical card markup.
 
     Each :class:`Card` carries its Item, resolved Classifiers, and image record (or ``None``), so a
     card renders correctly un-enriched, enriched, or manually-overridden from one template.
     ``images_enabled`` adds the per-card manual upload form only when an image bucket is configured
-    to receive it."""
+    to receive it. ``next_url`` is where the sentinel points for the next window."""
     return _env.get_template("_grid.html").render(
-        cards=cards, classifiers=CLASSIFIERS, images_enabled=images_enabled
+        cards=cards,
+        classifiers=CLASSIFIERS,
+        images_enabled=images_enabled,
+        has_more=has_more,
+        next_url=next_url,
+    )
+
+
+def render_cards(
+    cards: list[Card],
+    *,
+    images_enabled: bool = False,
+    has_more: bool = False,
+    next_url: str = "",
+) -> str:
+    """Render just the cards of one window plus the trailing sentinel — the inner fragment, with no
+    surrounding ``<ul>``. This is what a load-more request returns: HTMX replaces the spent sentinel
+    with these, appending the next window into the existing grid in place."""
+    return _env.get_template("_cards.html").render(
+        cards=cards,
+        classifiers=CLASSIFIERS,
+        images_enabled=images_enabled,
+        has_more=has_more,
+        next_url=next_url,
     )
 
 
@@ -38,10 +68,16 @@ def render_catalog(
     sort: str = "",
     selected_classifiers: dict[str, set[str]] | None = None,
     images_enabled: bool = False,
+    total: int | None = None,
+    has_more: bool = False,
+    next_url: str = "",
 ) -> str:
     return _env.get_template("catalog.html").render(
         cards=cards,
         classifiers=CLASSIFIERS,
+        total=len(cards) if total is None else total,
+        has_more=has_more,
+        next_url=next_url,
         include_out_of_stock=include_out_of_stock,
         categories=categories or [],
         selected_category=selected_category,

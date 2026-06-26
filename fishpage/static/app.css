@@ -193,6 +193,30 @@ a {
   background: var(--surface);
 }
 
+/* The windowing sentinel: it spans the full grid width and sits centred under the loaded cards, so
+   the link the rest of the catalog hangs off reads as one quiet, full-width control rather than a
+   stray card. HTMX reveals it on scroll; with no JS it is a plain link the buyer clicks. */
+.catalog-grid .load-more {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: center;
+  padding: 0.5rem 0;
+}
+
+.catalog-grid .load-more a {
+  padding: 0.5rem 1.1rem;
+  font-weight: 600;
+  color: var(--accent);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  text-decoration: none;
+}
+
+.catalog-grid .load-more a:hover {
+  border-color: var(--accent);
+}
+
 /* Fixed aspect ratio + cover so mismatched or placeholder images never break the row. */
 .card img {
   width: 100%;
