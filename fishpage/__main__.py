@@ -34,6 +34,7 @@ _log = logging.getLogger(__name__)
 def build_app(settings: Settings):
     conn = open_store(settings.db_path)
     observability.track_catalog_freshness(conn)
+    observability.track_enrichment_queue_depth(conn)
     loaded = seed_if_empty(conn, settings.pdf_path)
     if loaded:
         _log.info("Seeded %d Items from %s", loaded, settings.pdf_path.name)
