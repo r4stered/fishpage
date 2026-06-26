@@ -53,6 +53,9 @@ class _Instruments:
     image_optimized_bytes: Counter
     image_optimize_errors: Counter
     enrichment_tokens: Counter
+    enrichment_calls: Counter
+    enrichment_species_unresolved: Counter
+    enrichment_classifier_unknown: Counter
 
 
 _meter_provider: MeterProvider
@@ -216,6 +219,34 @@ def record_enrichment_tokens(input_tokens: int, output_tokens: int, *, model: st
     _instruments.enrichment_tokens.add(output_tokens, {"direction": "output", "model": model})
 
 
+def record_enrichment_call(*, outcome: str, model: str) -> None:
+    """Record that one Enrichment call finished, tagged by its ``outcome`` and ``model``.
+
+    ``outcome`` is ``ok`` when the call returned a result and ``failed`` when it raised; split by
+    model so the failure rate of each tier reads off the same counter. The dashboard derives the
+    failure rate from the two outcomes rather than the app tracking it.
+    """
+    _instruments.enrichment_calls.add(1, {"outcome": outcome, "model": model})
+
+
+def record_enrichment_species_unresolved() -> None:
+    """Record that one call came back unable to resolve a species.
+
+    A rising rate is the early signal that name-resolution is silently degrading — the honesty
+    guardrail returning null where it once mapped a name.
+    """
+    _instruments.enrichment_species_unresolved.add(1)
+
+
+def record_enrichment_classifier_unknown(*, classifier: str) -> None:
+    """Record that one Classifier came back ``unknown``, tagged by which ``classifier`` it was.
+
+    Tagging by Classifier makes the honesty guardrail observable per attribute, so a single
+    Classifier degrading to mostly-``unknown`` shows up rather than hiding in an aggregate.
+    """
+    _instruments.enrichment_classifier_unknown.add(1, {"classifier": classifier})
+
+
 def track_catalog_freshness(
     conn: sqlite3.Connection,
     *,
@@ -305,6 +336,21 @@ def _install(
             "fishpage.enrichment.tokens",
             unit="{token}",
             description="Tokens spent on Enrichment Claude calls, by direction and model",
+        ),
+        enrichment_calls=meter.create_counter(
+            "fishpage.enrichment.calls",
+            unit="{call}",
+            description="Enrichment calls drained, by outcome and model",
+        ),
+        enrichment_species_unresolved=meter.create_counter(
+            "fishpage.enrichment.species_unresolved",
+            unit="{call}",
+            description="Enrichment calls that resolved no species",
+        ),
+        enrichment_classifier_unknown=meter.create_counter(
+            "fishpage.enrichment.classifier_unknown",
+            unit="{classifier}",
+            description="Classifiers that resolved to unknown, by classifier",
         ),
     )
 
