@@ -182,6 +182,10 @@ def create_app(
             set_classifier_override(conn, sku, key, value)
         except ValueError as exc:
             return JSONResponse({"detail": str(exc)}, status_code=400)
+        # Count the accepted correction, tagged by which Classifier — a rising rate is direct
+        # evidence the AI reads are not trusted. Recorded after the override lands so a rejected
+        # value (the 400 above) or an unknown SKU (the 404) never inflates the signal.
+        observability.record_enrichment_override(classifier=key)
         # Audit the mutation: the Actor, SKU, and the corrected Classifier ride as indexed fields,
         # so a human correction joins the same actor query as uploads and re-enrichments.
         _log.info(

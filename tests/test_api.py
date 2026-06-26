@@ -611,6 +611,32 @@ def test_classifier_override_route_400s_a_value_outside_the_vocabulary(tmp_path)
     assert classifier_overrides_for(conn, "110042") == {}
 
 
+def test_accepted_override_increments_the_counter_tagged_by_classifier(tmp_path, telemetry):
+    conn = open_store(tmp_path / "fishpage.db")
+    reconcile(conn, [ORNATE_M], JUN19)
+    app_client = TestClient(create_app(conn))
+
+    app_client.post("/items/110042/classifier", data={"key": "difficulty", "value": "beginner"})
+
+    # An accepted correction is counted once, tagged by which Classifier was overridden, so a high
+    # override rate per Classifier reads off this counter.
+    points = telemetry.points("fishpage.enrichment.overrides")
+    assert points == [({"classifier": "difficulty"}, 1)]
+
+
+def test_a_rejected_override_does_not_touch_the_override_counter(tmp_path, telemetry):
+    conn = open_store(tmp_path / "fishpage.db")
+    reconcile(conn, [ORNATE_M], JUN19)
+    app_client = TestClient(create_app(conn))
+
+    # Out-of-vocabulary value (400) and unknown SKU (404) both fail before any write — neither
+    # may inflate the trust signal.
+    app_client.post("/items/110042/classifier", data={"key": "difficulty", "value": "trivial"})
+    app_client.post("/items/999999/classifier", data={"key": "difficulty", "value": "beginner"})
+
+    assert "fishpage.enrichment.overrides" not in telemetry.metric_names()
+
+
 def _enriched_client(tmp_path):
     """A catalog where the two oddballs carry contrasting care reads, for the Classifier facets."""
     conn = open_store(tmp_path / "fishpage.db")

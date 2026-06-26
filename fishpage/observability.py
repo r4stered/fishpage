@@ -56,6 +56,7 @@ class _Instruments:
     enrichment_calls: Counter
     enrichment_species_unresolved: Counter
     enrichment_classifier_unknown: Counter
+    enrichment_overrides: Counter
 
 
 _meter_provider: MeterProvider
@@ -247,6 +248,16 @@ def record_enrichment_classifier_unknown(*, classifier: str) -> None:
     _instruments.enrichment_classifier_unknown.add(1, {"classifier": classifier})
 
 
+def record_enrichment_override(*, classifier: str) -> None:
+    """Record that a human accepted-corrected one Classifier, tagged by which ``classifier`` it was.
+
+    A rising rate is direct evidence the ``ai-generated`` reads are not trusted — the quality
+    signal that pairs with the honesty-gap counters. Recorded only when a correction is actually
+    accepted, so a rejected or invalid override never inflates it.
+    """
+    _instruments.enrichment_overrides.add(1, {"classifier": classifier})
+
+
 def track_catalog_freshness(
     conn: sqlite3.Connection,
     *,
@@ -378,6 +389,11 @@ def _install(
             "fishpage.enrichment.classifier_unknown",
             unit="{classifier}",
             description="Classifiers that resolved to unknown, by classifier",
+        ),
+        enrichment_overrides=meter.create_counter(
+            "fishpage.enrichment.overrides",
+            unit="{override}",
+            description="Human Classifier corrections accepted, by classifier",
         ),
     )
 
