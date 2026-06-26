@@ -1,0 +1,14 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "fishpage-images",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": [
+        "-c",
+        "FISHPAGE_IMAGES_ENABLED=1 R2_IMAGES_BUCKET=fishpage-images R2_IMAGES_ENDPOINT=https://example.r2.cloudflarestorage.com R2_IMAGES_ACCESS_KEY_ID=dev R2_IMAGES_SECRET_ACCESS_KEY=dev FISHPAGE_DB=/tmp/fishpage-preview.db PORT=8042 uv run fishpage"
+      ],
+      "port": 8042
+    }
+  ]
+}

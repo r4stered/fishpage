@@ -3,10 +3,20 @@ from decimal import Decimal
 
 from fishpage import observability
 from fishpage.config import load_settings
+from fishpage.enricher import Difficulty, EnrichmentResult, PlantSafe, Temperament
 from fishpage.models import Item
-from fishpage.store import open_store, reconcile
+from fishpage.store import open_store, persist_enrichment, reconcile
 
 ORNATE_M = Item("110042", "M", "Bichir Ornate", Decimal("28.99"), None, 15)
+TIGER_M = Item("110043", "M", "Bichir Tiger", Decimal("31.99"), None, 8)
+
+AN_ENRICHMENT = EnrichmentResult(
+    scientific_name="Polypterus ornatipinnis",
+    common_name="Ornate Bichir",
+    difficulty=Difficulty.INTERMEDIATE,
+    temperament=Temperament.SEMI_AGGRESSIVE,
+    plant_safe=PlantSafe.SAFE,
+)
 
 
 def test_configure_is_a_noop_when_no_exporter_endpoint_is_configured():
@@ -44,3 +54,38 @@ def test_catalog_freshness_gauge_reports_nothing_for_an_empty_catalog(tmp_path, 
     # alert treats the absence as the stale signal rather than reporting a bogus 0 days.
     assert telemetry.counter("fishpage.catalog.days_since_last_ingest") == 0
     assert "fishpage.catalog.days_since_last_ingest" not in telemetry.metric_names()
+
+
+def test_queue_depth_gauge_reports_the_count_of_unenriched_items(tmp_path, telemetry):
+    conn = open_store(tmp_path / "fishpage.db")
+    reconcile(conn, [ORNATE_M, TIGER_M], date(2026, 6, 19))
+    # One of the two Items has been enriched, so the queue is one Item deep.
+    persist_enrichment(conn, ORNATE_M.sku, AN_ENRICHMENT)
+
+    observability.track_enrichment_queue_depth(conn)
+
+    assert telemetry.counter("fishpage.enrichment.queue_depth") == 1
+
+
+def test_queue_depth_gauge_reports_zero_for_a_fully_drained_catalog(tmp_path, telemetry):
+    conn = open_store(tmp_path / "fishpage.db")
+    reconcile(conn, [ORNATE_M], date(2026, 6, 19))
+    persist_enrichment(conn, ORNATE_M.sku, AN_ENRICHMENT)
+
+    observability.track_enrichment_queue_depth(conn)
+
+    # A populated catalog with nothing left to enrich is a true zero — the drainer caught up — not
+    # the missing-data signal an empty catalog gives.
+    assert telemetry.counter("fishpage.enrichment.queue_depth") == 0
+    assert "fishpage.enrichment.queue_depth" in telemetry.metric_names()
+
+
+def test_queue_depth_gauge_reports_nothing_for_an_empty_catalog(tmp_path, telemetry):
+    conn = open_store(tmp_path / "fishpage.db")  # never ingested
+
+    observability.track_enrichment_queue_depth(conn)
+
+    # No queue exists when nothing has ever been ingested; the gauge stays silent so Grafana reads
+    # the absence as missing data rather than a bogus empty queue.
+    assert telemetry.counter("fishpage.enrichment.queue_depth") == 0
+    assert "fishpage.enrichment.queue_depth" not in telemetry.metric_names()

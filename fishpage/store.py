@@ -165,6 +165,25 @@ def unenriched_items(conn: sqlite3.Connection) -> list[Item]:
     return [_row_to_item(row) for row in rows]
 
 
+def unenriched_count(conn: sqlite3.Connection) -> int:
+    """How many Items are still un-enriched — the depth of the drainer's work queue.
+
+    The same left anti-join as :func:`unenriched_items`, counted in SQL rather than materialised,
+    so the queue-depth gauge reads a single number without loading the queue on every collection.
+    """
+    row = conn.execute(
+        "SELECT COUNT(*) AS depth "
+        "FROM items i LEFT JOIN enrichment e ON e.sku = i.sku "
+        "WHERE e.sku IS NULL"
+    ).fetchone()
+    return row["depth"]
+
+
+def catalog_is_empty(conn: sqlite3.Connection) -> bool:
+    """Whether the catalog has never been populated — no Items have ever been ingested."""
+    return conn.execute("SELECT 1 FROM items LIMIT 1").fetchone() is None
+
+
 def persist_enrichment(conn: sqlite3.Connection, sku: str, result: EnrichmentResult) -> None:
     """Write one Item's AI-read species and care Classifiers into the ``enrichment`` table.
 

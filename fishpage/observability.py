@@ -278,6 +278,33 @@ def track_catalog_freshness(
     )
 
 
+def track_enrichment_queue_depth(conn: sqlite3.Connection) -> None:
+    """Register the observable gauge that tracks how far behind the drainer is.
+
+    On every metric collection it reports how many Items still have no enrichment row — the
+    drainer's work queue. A queue that climbs and never drains is the signal that the drainer is
+    wedged or the upstream call is failing. A never-populated catalog (no ingest ever) reports no
+    value, which Grafana reads as missing data rather than a misleading zero; a populated catalog
+    with nothing left to enrich reports a true 0, the drainer caught up.
+    """
+    # Imported here, not at module scope: store imports this module for its recorders, so a
+    # top-level import back into store would close the cycle.
+    from fishpage.store import catalog_is_empty, unenriched_count
+
+    def observe(_options: CallbackOptions):
+        if catalog_is_empty(conn):
+            return []
+        return [Observation(unenriched_count(conn))]
+
+    meter = _meter_provider.get_meter(_INSTRUMENTING_SCOPE)
+    meter.create_observable_gauge(
+        "fishpage.enrichment.queue_depth",
+        callbacks=[observe],
+        unit="{item}",
+        description="Items still awaiting enrichment",
+    )
+
+
 def _install(
     *,
     metric_readers: list[MetricReader],
