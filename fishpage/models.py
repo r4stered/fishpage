@@ -49,6 +49,12 @@ class Item:
     by ingestion, not a parse fact, so a freshly-parsed Item leaves it ``None`` until it
     is reconciled into the store.
 
+    ``first_seen`` is the date the SKU *first* appeared in a Stocklist — stamped once on
+    insert and never advanced, so it distinguishes a first-ever sighting from a SKU that
+    went out of stock and returned (which advances ``last_seen`` but not ``first_seen``).
+    Like ``last_seen`` it is a storage fact, ``None`` until reconciled and on rows that
+    predate the column.
+
     ``reuse_flagged`` is likewise a storage fact: ingestion sets it when this SKU
     reappeared under a materially different name, marking the Item for human review. A
     freshly-parsed Item is never flagged.
@@ -61,6 +67,7 @@ class Item:
     special_price: Decimal | None
     qty_avail: int
     last_seen: date | None = None
+    first_seen: date | None = None
     reuse_flagged: bool = False
 
     @property

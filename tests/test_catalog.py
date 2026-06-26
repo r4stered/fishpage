@@ -6,6 +6,7 @@ override wins and is marked manual, else the AI value is marked ai-generated, el
 is pinned independently of how a card later draws it.
 """
 
+from dataclasses import replace
 from decimal import Decimal
 
 from fishpage.catalog import build_cards, filter_cards_by_classifiers, resolve_classifiers
@@ -108,6 +109,23 @@ def test_build_cards_assembles_item_image_and_resolved_classifiers_in_order():
     # The un-enriched, image-less Item degrades cleanly: no image, no badges.
     assert leaf.image is None
     assert leaf.classifiers == []
+
+
+def test_build_cards_marks_new_this_week_against_the_latest_stocklist_date():
+    from datetime import date
+
+    brand_new = replace(ORNATE_M, first_seen=date(2026, 6, 26), last_seen=date(2026, 6, 26))
+    returning = replace(LEAF, first_seen=date(2026, 6, 19), last_seen=date(2026, 6, 26))
+    cards = build_cards(
+        [brand_new, returning],
+        enrichments={},
+        images={},
+        overrides={},
+        latest_date=date(2026, 6, 26),
+    )
+
+    # The first-ever sighting in the latest Stocklist carries the badge; the returner does not.
+    assert [card.new_this_week for card in cards] == [True, False]
 
 
 def _cards_for_filtering():

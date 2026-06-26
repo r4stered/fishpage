@@ -24,6 +24,15 @@ def test_new_sku_inserts_and_records_last_seen(tmp_path):
     assert stored["110042"].last_seen == JUN19
 
 
+def test_new_sku_records_first_seen(tmp_path):
+    conn = open_store(tmp_path / "fishpage.db")
+
+    reconcile(conn, [ORNATE_M], JUN19)
+
+    stored = {item.sku: item for item in all_items(conn)}
+    assert stored["110042"].first_seen == JUN19
+
+
 def test_existing_sku_updates_price_and_qty_and_advances_last_seen(tmp_path):
     conn = open_store(tmp_path / "fishpage.db")
     reconcile(conn, [ORNATE_M], JUN19)
@@ -76,3 +85,6 @@ def test_last_seen_reflects_most_recent_appearance(tmp_path):
     # last_seen is the latest Stocklist the SKU appeared in (JUL03), not the run it was absent.
     assert stored["110042"].last_seen == JUL03
     assert stored["110042"].qty_avail == 15
+    # first_seen stays pinned to the first appearance (JUN19) even though the SKU returned — that
+    # gap from last_seen is what keeps a returning Item from masquerading as new this week.
+    assert stored["110042"].first_seen == JUN19

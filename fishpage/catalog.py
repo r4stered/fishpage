@@ -8,8 +8,10 @@ clean card rather than a row of empty badges.
 """
 
 from dataclasses import dataclass
+from datetime import date
 from enum import StrEnum
 
+from fishpage.browse import is_new_this_week
 from fishpage.enricher import Difficulty, EnrichmentResult, PlantSafe, Temperament
 from fishpage.models import ImageRecord, Item, Provenance
 
@@ -26,12 +28,14 @@ class ClassifierView:
 
 @dataclass(frozen=True)
 class Card:
-    """Everything one catalog card draws from: the Item, its image (or ``None``), and its resolved
-    display Classifiers. The single bundle the grid template iterates — no parallel side-maps."""
+    """Everything one catalog card draws from: the Item, its image (or ``None``), its resolved
+    display Classifiers, and whether it is new this week. The single bundle the grid template
+    iterates — no parallel side-maps."""
 
     item: Item
     image: ImageRecord | None
     classifiers: list[ClassifierView]
+    new_this_week: bool = False
 
     @property
     def values(self) -> dict[str, str]:
@@ -97,14 +101,17 @@ def build_cards(
     enrichments: dict[str, EnrichmentResult],
     images: dict[str, ImageRecord],
     overrides: dict[str, dict[str, str]],
+    latest_date: date | None = None,
 ) -> list[Card]:
     """Assemble one :class:`Card` per Item, in order, joining the batch-read enrichment, image, and
-    override maps. An Item missing from a map degrades cleanly — no image, no badges."""
+    override maps and marking each Item new-this-week against ``latest_date`` (the latest Stocklist
+    date). An Item missing from a map degrades cleanly — no image, no badges."""
     return [
         Card(
             item=item,
             image=images.get(item.sku),
             classifiers=resolve_classifiers(enrichments.get(item.sku), overrides.get(item.sku, {})),
+            new_this_week=is_new_this_week(item, latest_date),
         )
         for item in items
     ]

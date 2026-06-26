@@ -2,6 +2,7 @@
 
 import logging
 import sqlite3
+from datetime import date
 from decimal import Decimal
 from pathlib import Path
 
@@ -288,15 +289,20 @@ def create_app(
         )
         return JSONResponse({"sku": sku, "status": "queued"})
 
-    def _filtered_cards(items: list[Item], selected_classifiers: dict[str, set[str]]) -> list:
+    def _filtered_cards(
+        items: list[Item],
+        selected_classifiers: dict[str, set[str]],
+        latest_date: date | None,
+    ) -> list:
         # Resolve every visible Item's Classifiers from one batch read each, then apply the
         # Classifier facets on the *resolved* values — so a manual override is what a chip filters
-        # on, exactly as it is what a badge shows.
+        # on, exactly as it is what a badge shows. latest_date drives the new-this-week badge.
         cards = build_cards(
             items,
             enrichments=all_enrichments(conn),
             images=all_images(conn),
             overrides=all_classifier_overrides(conn),
+            latest_date=latest_date,
         )
         return filter_cards_by_classifiers(cards, selected_classifiers)
 
@@ -307,6 +313,7 @@ def create_app(
         category: str | None = None,
         size: str | None = None,
         on_special: bool = False,
+        new_only: bool = False,
         search: str = "",
         sort: str = "",
         page: int = 1,
@@ -320,6 +327,9 @@ def create_app(
         # vocabulary. Both view filters are applied in process instead.
         items = all_items(conn, include_out_of_stock=True)
         categories = sorted({item.category for item in items})
+        # The latest Stocklist date drives "this week" — the same MAX(last_seen) ingestion keeps
+        # monotonic — and is read once for both the new-only filter and the per-card badge.
+        latest_date = latest_stocklist_date(conn)
         if not include_out_of_stock:
             items = [item for item in items if item.qty_avail > 0]
         items = browse(
@@ -327,6 +337,8 @@ def create_app(
             category=category,
             size=size,
             on_special=on_special,
+            new_only=new_only,
+            latest_date=latest_date,
             search=search,
             sort=sort,
         )
@@ -335,7 +347,7 @@ def create_app(
             "temperament": set(temperament),
             "plant_safe": set(plant_safe),
         }
-        cards = _filtered_cards(items, selected_classifiers)
+        cards = _filtered_cards(items, selected_classifiers, latest_date)
         # Window the filtered cards so even the full ~900-Item set (include out-of-stock on) renders
         # one bounded page of DOM, not all of it. The trailing sentinel points at the next page with
         # the active filters preserved, so a load-more continues the same filtered view.
@@ -374,6 +386,7 @@ def create_app(
                 sizes=list(SIZE_GRADES),
                 selected_size=size,
                 on_special=on_special,
+                new_only=new_only,
                 search=search,
                 sort=sort,
                 selected_classifiers=selected_classifiers,

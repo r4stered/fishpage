@@ -112,6 +112,16 @@ MIGRATIONS: list[tuple[int, str]] = [
         );
         """,
     ),
+    (
+        6,
+        # The date a SKU was first seen, stamped once on insert and never advanced, so a
+        # first-ever sighting stays distinguishable from a SKU that went out of stock and
+        # returned (which advances last_seen but not this). Nullable: rows inserted before
+        # this column carry no first-sight date and read as not-new.
+        """
+        ALTER TABLE items ADD COLUMN first_seen TEXT;
+        """,
+    ),
 ]
 
 

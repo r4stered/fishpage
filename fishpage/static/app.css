@@ -247,6 +247,20 @@ a {
   color: var(--text);
 }
 
+/* New-this-week marker: a filled accent pill that stands apart from the outlined Classifier badges,
+   so a first-ever sighting in the latest Stocklist catches the eye at a glance. */
+.card .badge-new {
+  align-self: flex-start;
+  padding: 0.15rem 0.55rem;
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--surface);
+  background: var(--accent);
+  border-radius: 999px;
+}
+
 /* The manual image upload reads as a quiet footer: pinned to the card's bottom with margin-top:auto
    so it lines up across a row even when a special-price badge makes one card taller, and stacked
    above a divider so the file picker and submit don't wrap into a disjointed cluster. */

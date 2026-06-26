@@ -1,6 +1,9 @@
 {% for card in cards %}
 {% set item = card.item %}
 <li class="card" id="card-{{ item.sku }}" data-sku="{{ item.sku }}">
+  {% if card.new_this_week %}
+  <span class="badge-new" title="First seen in the latest Stocklist">New this week</span>
+  {% endif %}
   {% if card.image %}
   <img class="image" src="/items/{{ item.sku }}/image" alt="{{ item.name }}" loading="lazy">
   {% if card.image.attribution %}

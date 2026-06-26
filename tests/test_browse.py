@@ -1,7 +1,18 @@
+from dataclasses import replace
+from datetime import date
 from decimal import Decimal
 
-from fishpage.browse import browse
+from fishpage.browse import browse, is_new_this_week
 from fishpage.models import Item
+
+JUN19 = date(2026, 6, 19)
+JUN26 = date(2026, 6, 26)
+
+
+def _seen(item: Item, *, first: date, last: date) -> Item:
+    """An ``Item`` stamped with first/last sighting dates, the storage facts browse derives on."""
+    return replace(item, first_seen=first, last_seen=last)
+
 
 # retail 10, no special → effective price 10
 PLAIN = Item("1", "M", "Plain", Decimal("10.00"), None, 5)
@@ -12,6 +23,50 @@ SMALL = Item("3", "S", "Small One", Decimal("4.00"), None, 5)
 JUMBO = Item("4", "Jumbo", "Big One", Decimal("80.00"), None, 5)
 # A plant row whose raw size token is a packaging unit, not a grade.
 POTTED = Item("5", "POTTED", "Sword Plant", Decimal("3.50"), None, 5)
+
+
+def test_new_this_week_is_a_first_ever_sighting_in_the_latest_stocklist():
+    # First seen in the latest Stocklist → new this week.
+    brand_new = _seen(PLAIN, first=JUN26, last=JUN26)
+    # Seen before and back this week: last_seen is the latest, but first_seen is not — a returning
+    # Item, not a new one.
+    returning = _seen(DISCOUNTED, first=JUN19, last=JUN26)
+    # Predates first-sight tracking → no first_seen → never new.
+    legacy = _seen(SMALL, first=JUN19, last=JUN19)
+    legacy = replace(legacy, first_seen=None)
+
+    assert is_new_this_week(brand_new, JUN26) is True
+    assert is_new_this_week(returning, JUN26) is False
+    assert is_new_this_week(legacy, JUN26) is False
+
+
+def test_new_only_keeps_only_items_new_in_the_latest_stocklist():
+    brand_new = _seen(PLAIN, first=JUN26, last=JUN26)
+    returning = _seen(DISCOUNTED, first=JUN19, last=JUN26)
+
+    result = browse([brand_new, returning], new_only=True, latest_date=JUN26)
+
+    assert [item.sku for item in result] == ["1"]
+
+
+def test_new_only_off_keeps_everything():
+    brand_new = _seen(PLAIN, first=JUN26, last=JUN26)
+    returning = _seen(DISCOUNTED, first=JUN19, last=JUN26)
+
+    result = browse([brand_new, returning], new_only=False, latest_date=JUN26)
+
+    assert {item.sku for item in result} == {"1", "2"}
+
+
+def test_sort_newest_orders_by_first_sight_descending_unknowns_last():
+    this_week = _seen(PLAIN, first=JUN26, last=JUN26)
+    last_week = _seen(DISCOUNTED, first=JUN19, last=JUN26)
+    legacy = replace(SMALL, first_seen=None, last_seen=JUN26)
+
+    result = browse([last_week, legacy, this_week], sort="newest")
+
+    # Newest first sighting leads; the Item with no first-sight date sorts last.
+    assert [item.sku for item in result] == ["1", "2", "3"]
 
 
 def test_sort_price_asc_orders_by_effective_price_not_retail():

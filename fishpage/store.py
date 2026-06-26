@@ -76,10 +76,13 @@ def reconcile(conn: sqlite3.Connection, items: list[Item], stocklist_date: date)
                 "reuse": int(reuse),
             }
         )
+    # first_seen is stamped from this run's date on insert and deliberately omitted from the
+    # ON CONFLICT update, so a returning SKU keeps its original first-sight date while last_seen
+    # advances — that gap is exactly what marks an Item "new this week".
     conn.executemany(
         "INSERT INTO items (sku, size, name, retail_price, special_price, qty_avail, last_seen, "
-        "reuse_flagged) "
-        "VALUES (:sku, :size, :name, :retail, :special, :qty, :last_seen, :reuse) "
+        "first_seen, reuse_flagged) "
+        "VALUES (:sku, :size, :name, :retail, :special, :qty, :last_seen, :last_seen, :reuse) "
         "ON CONFLICT(sku) DO UPDATE SET "
         "size = excluded.size, name = excluded.name, retail_price = excluded.retail_price, "
         "special_price = excluded.special_price, qty_avail = excluded.qty_avail, "
@@ -141,7 +144,7 @@ def all_items(conn: sqlite3.Connection, *, include_out_of_stock: bool = True) ->
     """
     query = (
         "SELECT sku, size, name, retail_price, special_price, qty_avail, last_seen, "
-        "reuse_flagged FROM items"
+        "first_seen, reuse_flagged FROM items"
     )
     if not include_out_of_stock:
         query += " WHERE qty_avail > 0"
@@ -158,7 +161,7 @@ def unenriched_items(conn: sqlite3.Connection) -> list[Item]:
     """
     rows = conn.execute(
         "SELECT i.sku, i.size, i.name, i.retail_price, i.special_price, i.qty_avail, "
-        "i.last_seen, i.reuse_flagged "
+        "i.last_seen, i.first_seen, i.reuse_flagged "
         "FROM items i LEFT JOIN enrichment e ON e.sku = i.sku "
         "WHERE e.sku IS NULL"
     ).fetchall()
@@ -381,6 +384,9 @@ def _row_to_item(row: sqlite3.Row) -> Item:
     last_seen: date | None = (
         None if row["last_seen"] is None else date.fromisoformat(row["last_seen"])
     )
+    first_seen: date | None = (
+        None if row["first_seen"] is None else date.fromisoformat(row["first_seen"])
+    )
     return Item(
         sku=row["sku"],
         size=row["size"],
@@ -389,6 +395,7 @@ def _row_to_item(row: sqlite3.Row) -> Item:
         special_price=special,
         qty_avail=row["qty_avail"],
         last_seen=last_seen,
+        first_seen=first_seen,
         reuse_flagged=bool(row["reuse_flagged"]),
     )
 
@@ -433,7 +440,7 @@ def pick_list_for(conn: sqlite3.Connection, actor: str) -> list[PickLine]:
     rows = conn.execute(
         "SELECT p.quantity AS quantity, "
         "i.sku, i.size, i.name, i.retail_price, i.special_price, i.qty_avail, "
-        "i.last_seen, i.reuse_flagged "
+        "i.last_seen, i.first_seen, i.reuse_flagged "
         "FROM pick_list p JOIN items i ON i.sku = p.sku "
         "WHERE p.actor = ? ORDER BY i.sku",
         (actor,),
