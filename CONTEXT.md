@@ -67,6 +67,14 @@ manual upload as the fallback. Coverage is partial: oddball species may have no 
 fall back to manual entry. Runs on first sight of a new SKU and on demand.
 _Avoid_: scraping (one possible mechanism, not the concept)
 
+**Strain**:
+A line-bred or fancy variant traded under a name (e.g. *Guppy Tequila Sunrise*, *Gold Marble Angel*)
+that resolves to a wild-type species whose own photo is the *wrong fish* — the variant looks nothing
+like the wild type. Enrichment flags an Item as strain-specific so automatic image acquisition skips
+it: a sourced species photo would mislead an order, so manual upload stays the image path for these.
+Roughly a quarter of the catalog is strain-specific.
+_Avoid_: species (a Strain resolves *to* a species but is not one); morph, variant used loosely.
+
 **Provenance**:
 The recorded origin of an enriched value on an Item — one of `manual`, `wikimedia`, or
 `ai-generated` — carried per attribute, so the catalog can show which Classifiers and images are a
@@ -92,3 +100,10 @@ where Provenance alone says only *that* a human did. Absent on non-`manual` imag
 human uploader.
 _Avoid_: confusing with `attribution` (the external photographer credited on a `wikimedia` image — a
 different "who"); author, owner.
+
+**Pick list**:
+The set of Items an Actor has gathered to order from the supplier, held per Actor and keyed by the
+Cloudflare Access email. The app has no checkout: a Pick list exists only to be exported as a list the
+buyer places through SDC, and is cleared on export. It is the app's only owned per-Actor persisted state.
+_Avoid_: cart, basket (no storefront or checkout); order (an actual order placed with SDC, which the
+app never does); inventory.
