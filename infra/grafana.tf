@@ -133,8 +133,28 @@ resource "grafana_dashboard" "overview" {
     timezone      = "browser"
     time          = { from = "now-24h", to = "now" }
     refresh       = "1m"
-    templating    = { list = [] }
     annotations   = { list = [] }
+
+    # Enrichment dollars are derived on the dashboard from a price-per-million-tokens variable, never
+    # from a price table in the app — a reprice is editing these defaults, not shipping code. Two
+    # textboxes (input/output) feed the estimated-cost stat below; defaults are a Sonnet-class rate
+    # and are meant to be overridden to the enricher's actual model price.
+    templating = { list = [
+      {
+        name    = "price_in"
+        type    = "textbox"
+        label   = "Input $/Mtok"
+        query   = "3"
+        current = { text = "3", value = "3" }
+      },
+      {
+        name    = "price_out"
+        type    = "textbox"
+        label   = "Output $/Mtok"
+        query   = "15"
+        current = { text = "15", value = "15" }
+      },
+    ] }
 
     panels = [
       # 1 — Recent image uploads: the INFO upload event, newest first. The "when + by who" view —
@@ -287,6 +307,180 @@ resource "grafana_dashboard" "overview" {
           wrapLogMessage   = true
           enableLogDetails = true
           sortOrder        = "Descending"
+        }
+      },
+
+      # --- Enrichment section: the cost, throughput, drainer-health, and quality signals the
+      # enrichment slices instrument. All Prometheus, all bare names across the OTLP boundary.
+      {
+        id      = 10
+        type    = "row"
+        title   = "Enrichment"
+        gridPos = { h = 1, w = 24, x = 0, y = 26 }
+      },
+
+      # Drainer health: Items still awaiting enrichment, over time. A line that climbs and never
+      # falls is the drainer wedged or the upstream call failing; a true 0 is the drainer caught up.
+      # No value at all is a never-populated catalog (the gauge reports nothing rather than a
+      # misleading zero), so connect-nulls is left off.
+      {
+        id         = 11
+        type       = "timeseries"
+        title      = "Un-enriched queue depth"
+        datasource = { type = "prometheus", uid = "grafanacloud-prom" }
+        gridPos    = { h = 8, w = 8, x = 0, y = 27 }
+        targets = [{
+          refId        = "A"
+          datasource   = { type = "prometheus", uid = "grafanacloud-prom" }
+          expr         = "max(fishpage_enrichment_queue_depth)"
+          legendFormat = "queue depth"
+          range        = true
+        }]
+        fieldConfig = {
+          defaults = {
+            unit   = "short"
+            custom = { drawStyle = "line", fillOpacity = 10, showPoints = "auto" }
+          }
+          overrides = []
+        }
+        options = {
+          legend  = { displayMode = "list", placement = "bottom" }
+          tooltip = { mode = "single" }
+        }
+      },
+
+      # Throughput: drainer calls split ok vs failed, by outcome. A failing upstream shows as the
+      # failed series climbing while ok flatlines; the failure rate reads straight off the two.
+      {
+        id         = 12
+        type       = "timeseries"
+        title      = "Enrichment calls by outcome"
+        datasource = { type = "prometheus", uid = "grafanacloud-prom" }
+        gridPos    = { h = 8, w = 8, x = 8, y = 27 }
+        targets = [{
+          refId        = "A"
+          datasource   = { type = "prometheus", uid = "grafanacloud-prom" }
+          expr         = "sum by (outcome) (increase(fishpage_enrichment_calls[$__rate_interval]))"
+          legendFormat = "{{outcome}}"
+          range        = true
+        }]
+        fieldConfig = {
+          defaults = {
+            unit   = "short"
+            custom = { drawStyle = "bars", fillOpacity = 60, stacking = { mode = "normal" } }
+          }
+          overrides = [
+            { matcher = { id = "byName", options = "ok" }, properties = [{ id = "color", value = { mode = "fixed", fixedColor = "green" } }] },
+            { matcher = { id = "byName", options = "failed" }, properties = [{ id = "color", value = { mode = "fixed", fixedColor = "red" } }] },
+          ]
+        }
+        options = {
+          legend  = { displayMode = "table", placement = "bottom", calcs = ["sum"] }
+          tooltip = { mode = "multi", sort = "desc" }
+        }
+      },
+
+      # Cost driver: tokens spent split by direction. The dollar figure is derived from these two
+      # counters and the price variables in the estimated-cost stat, never stored as money here.
+      {
+        id         = 13
+        type       = "timeseries"
+        title      = "Enrichment tokens by direction"
+        datasource = { type = "prometheus", uid = "grafanacloud-prom" }
+        gridPos    = { h = 8, w = 8, x = 16, y = 27 }
+        targets = [{
+          refId        = "A"
+          datasource   = { type = "prometheus", uid = "grafanacloud-prom" }
+          expr         = "sum by (direction) (increase(fishpage_enrichment_tokens[$__rate_interval]))"
+          legendFormat = "{{direction}}"
+          range        = true
+        }]
+        fieldConfig = {
+          defaults = {
+            unit   = "short"
+            custom = { drawStyle = "line", fillOpacity = 10, showPoints = "auto" }
+          }
+          overrides = []
+        }
+        options = {
+          legend  = { displayMode = "table", placement = "bottom", calcs = ["sum"] }
+          tooltip = { mode = "multi", sort = "desc" }
+        }
+      },
+
+      # Derived spend over the dashboard window: (input tokens × $price_in + output tokens ×
+      # $price_out) / 1e6. The price variables are the only place a model rate lives.
+      {
+        id         = 14
+        type       = "stat"
+        title      = "Estimated enrichment cost (window)"
+        datasource = { type = "prometheus", uid = "grafanacloud-prom" }
+        gridPos    = { h = 8, w = 8, x = 0, y = 35 }
+        targets = [{
+          refId      = "A"
+          datasource = { type = "prometheus", uid = "grafanacloud-prom" }
+          expr       = "sum(increase(fishpage_enrichment_tokens{direction=\"input\"}[$__range])) * $price_in / 1e6 + sum(increase(fishpage_enrichment_tokens{direction=\"output\"}[$__range])) * $price_out / 1e6"
+          instant    = true
+        }]
+        fieldConfig = {
+          defaults = {
+            unit       = "currencyUSD"
+            decimals   = 2
+            thresholds = { mode = "absolute", steps = [{ color = "green", value = null }] }
+          }
+          overrides = []
+        }
+        options = {
+          colorMode     = "none"
+          graphMode     = "none"
+          textMode      = "value"
+          reduceOptions = { calcs = ["lastNotNull"] }
+        }
+      },
+
+      # Quality / honesty signals: a rising rate of species that won't resolve, Classifiers coming
+      # back unknown, or humans overriding the AI is the early evidence enrichment is degrading or
+      # not trusted. The latter two are split by which Classifier so a single attribute degrading
+      # shows up rather than hiding in an aggregate.
+      {
+        id         = 15
+        type       = "timeseries"
+        title      = "Enrichment quality signals"
+        datasource = { type = "prometheus", uid = "grafanacloud-prom" }
+        gridPos    = { h = 8, w = 16, x = 8, y = 35 }
+        targets = [
+          {
+            refId        = "species_unresolved"
+            datasource   = { type = "prometheus", uid = "grafanacloud-prom" }
+            expr         = "sum(increase(fishpage_enrichment_species_unresolved[$__rate_interval]))"
+            legendFormat = "species unresolved"
+            range        = true
+          },
+          {
+            refId        = "classifier_unknown"
+            datasource   = { type = "prometheus", uid = "grafanacloud-prom" }
+            expr         = "sum by (classifier) (increase(fishpage_enrichment_classifier_unknown[$__rate_interval]))"
+            legendFormat = "unknown {{classifier}}"
+            range        = true
+          },
+          {
+            refId        = "overrides"
+            datasource   = { type = "prometheus", uid = "grafanacloud-prom" }
+            expr         = "sum by (classifier) (increase(fishpage_enrichment_overrides[$__rate_interval]))"
+            legendFormat = "override {{classifier}}"
+            range        = true
+          },
+        ]
+        fieldConfig = {
+          defaults = {
+            unit   = "short"
+            custom = { drawStyle = "line", fillOpacity = 10, showPoints = "auto" }
+          }
+          overrides = []
+        }
+        options = {
+          legend  = { displayMode = "table", placement = "bottom", calcs = ["sum"] }
+          tooltip = { mode = "multi", sort = "desc" }
         }
       },
     ]
