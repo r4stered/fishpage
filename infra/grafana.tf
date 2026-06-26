@@ -111,11 +111,14 @@ resource "grafana_rule_group" "stale_catalog" {
 #     service.name (`{service_name="fishpage"}`).
 #
 # OTLP→Prometheus name rewriting (the same boundary the alert documents): Grafana Cloud rewrites
-# dots to underscores. Unit and `_total` suffixing is *off* on this stack — the freshness gauge
-# proves it, arriving bare as `fishpage_catalog_days_since_last_ingest` despite its `d` unit. The
-# same switch governs counter `_total` suffixes, so the #94 image counters are queried bare too:
-# `fishpage_image_optimized`, `fishpage_image_original_bytes`, `fishpage_image_optimized_bytes`,
-# `fishpage_image_optimize_errors`. The single `provenance` attribute carries through as a label.
+# dots to underscores and appends `_total` to every counter (monotonic sum), but does not append
+# unit suffixes. The two halves are independent and the gauges confirm both: a gauge never takes
+# `_total`, so `fishpage_catalog_days_since_last_ingest` arriving bare (also no `_days` unit tail)
+# shows only that unit suffixing is off — it says nothing about counters. The counters land with a
+# `_total` tail and so are queried with it: `fishpage_image_optimized_total`,
+# `fishpage_image_original_bytes_total`, `fishpage_image_optimized_bytes_total`,
+# `fishpage_image_optimize_errors_total`. The single `provenance` attribute carries through as a
+# label; gauges are queried bare, counters with the `_total` suffix.
 #
 # The upload event and the decode-failure warning are the two log records `store_image` emits; both
 # carry `actor`, `sku`, and `provenance` as record attributes. The INFO upload event is the one
@@ -196,35 +199,35 @@ resource "grafana_dashboard" "overview" {
           {
             refId        = "uploads"
             datasource   = { type = "prometheus", uid = "grafanacloud-prom" }
-            expr         = "sum by (provenance) (increase(fishpage_image_optimized[$__rate_interval]))"
+            expr         = "sum by (provenance) (increase(fishpage_image_optimized_total[$__rate_interval]))"
             legendFormat = "uploads {{provenance}}"
             range        = true
           },
           {
             refId        = "bytes_in"
             datasource   = { type = "prometheus", uid = "grafanacloud-prom" }
-            expr         = "sum(increase(fishpage_image_original_bytes[$__rate_interval]))"
+            expr         = "sum(increase(fishpage_image_original_bytes_total[$__rate_interval]))"
             legendFormat = "bytes in"
             range        = true
           },
           {
             refId        = "bytes_out"
             datasource   = { type = "prometheus", uid = "grafanacloud-prom" }
-            expr         = "sum(increase(fishpage_image_optimized_bytes[$__rate_interval]))"
+            expr         = "sum(increase(fishpage_image_optimized_bytes_total[$__rate_interval]))"
             legendFormat = "bytes out"
             range        = true
           },
           {
             refId        = "space_saved"
             datasource   = { type = "prometheus", uid = "grafanacloud-prom" }
-            expr         = "sum(increase(fishpage_image_original_bytes[$__rate_interval])) - sum(increase(fishpage_image_optimized_bytes[$__rate_interval]))"
+            expr         = "sum(increase(fishpage_image_original_bytes_total[$__rate_interval])) - sum(increase(fishpage_image_optimized_bytes_total[$__rate_interval]))"
             legendFormat = "space saved"
             range        = true
           },
           {
             refId        = "errors"
             datasource   = { type = "prometheus", uid = "grafanacloud-prom" }
-            expr         = "sum(increase(fishpage_image_optimize_errors[$__rate_interval]))"
+            expr         = "sum(increase(fishpage_image_optimize_errors_total[$__rate_interval]))"
             legendFormat = "optimize errors"
             range        = true
           },
@@ -360,7 +363,7 @@ resource "grafana_dashboard" "overview" {
         targets = [{
           refId        = "A"
           datasource   = { type = "prometheus", uid = "grafanacloud-prom" }
-          expr         = "sum by (outcome) (increase(fishpage_enrichment_calls[$__rate_interval]))"
+          expr         = "sum by (outcome) (increase(fishpage_enrichment_calls_total[$__rate_interval]))"
           legendFormat = "{{outcome}}"
           range        = true
         }]
@@ -391,7 +394,7 @@ resource "grafana_dashboard" "overview" {
         targets = [{
           refId        = "A"
           datasource   = { type = "prometheus", uid = "grafanacloud-prom" }
-          expr         = "sum by (direction) (increase(fishpage_enrichment_tokens[$__rate_interval]))"
+          expr         = "sum by (direction) (increase(fishpage_enrichment_tokens_total[$__rate_interval]))"
           legendFormat = "{{direction}}"
           range        = true
         }]
@@ -419,7 +422,7 @@ resource "grafana_dashboard" "overview" {
         targets = [{
           refId      = "A"
           datasource = { type = "prometheus", uid = "grafanacloud-prom" }
-          expr       = "sum(increase(fishpage_enrichment_tokens{direction=\"input\"}[$__range])) * $price_in / 1e6 + sum(increase(fishpage_enrichment_tokens{direction=\"output\"}[$__range])) * $price_out / 1e6"
+          expr       = "sum(increase(fishpage_enrichment_tokens_total{direction=\"input\"}[$__range])) * $price_in / 1e6 + sum(increase(fishpage_enrichment_tokens_total{direction=\"output\"}[$__range])) * $price_out / 1e6"
           instant    = true
         }]
         fieldConfig = {
@@ -452,21 +455,21 @@ resource "grafana_dashboard" "overview" {
           {
             refId        = "species_unresolved"
             datasource   = { type = "prometheus", uid = "grafanacloud-prom" }
-            expr         = "sum(increase(fishpage_enrichment_species_unresolved[$__rate_interval]))"
+            expr         = "sum(increase(fishpage_enrichment_species_unresolved_total[$__rate_interval]))"
             legendFormat = "species unresolved"
             range        = true
           },
           {
             refId        = "classifier_unknown"
             datasource   = { type = "prometheus", uid = "grafanacloud-prom" }
-            expr         = "sum by (classifier) (increase(fishpage_enrichment_classifier_unknown[$__rate_interval]))"
+            expr         = "sum by (classifier) (increase(fishpage_enrichment_classifier_unknown_total[$__rate_interval]))"
             legendFormat = "unknown {{classifier}}"
             range        = true
           },
           {
             refId        = "overrides"
             datasource   = { type = "prometheus", uid = "grafanacloud-prom" }
-            expr         = "sum by (classifier) (increase(fishpage_enrichment_overrides[$__rate_interval]))"
+            expr         = "sum by (classifier) (increase(fishpage_enrichment_overrides_total[$__rate_interval]))"
             legendFormat = "override {{classifier}}"
             range        = true
           },
