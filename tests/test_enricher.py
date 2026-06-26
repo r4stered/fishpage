@@ -39,9 +39,16 @@ class _ToolUseBlock:
         self.input = payload
 
 
+class _Usage:
+    def __init__(self, input_tokens: int, output_tokens: int):
+        self.input_tokens = input_tokens
+        self.output_tokens = output_tokens
+
+
 class _Response:
-    def __init__(self, *content):
+    def __init__(self, *content, usage: _Usage | None = None):
         self.content = list(content)
+        self.usage = usage or _Usage(0, 0)
 
 
 class FakeClient:
@@ -50,14 +57,15 @@ class FakeClient:
     The whole test suite drives the enricher through this — no key, no network.
     """
 
-    def __init__(self, payload: dict):
+    def __init__(self, payload: dict, usage: _Usage | None = None):
         self._payload = payload
+        self._usage = usage or _Usage(0, 0)
         self.calls: list[dict] = []
         self.messages = self
 
     def create(self, **kwargs) -> _Response:
         self.calls.append(kwargs)
-        return _Response(_ToolUseBlock("record_enrichment", self._payload))
+        return _Response(_ToolUseBlock("record_enrichment", self._payload), usage=self._usage)
 
 
 def test_classifiers_support_unknown_and_species_supports_none():
@@ -241,6 +249,66 @@ def test_enrich_fails_loudly_when_the_model_does_not_call_the_tool():
 
     with pytest.raises(ValueError):
         ClaudeEnricher(empty).enrich("Leaf Fish", category="Monster/Oddball", size="-")
+
+
+def test_enrich_records_token_spend_tagged_by_direction_and_model(telemetry):
+    client = FakeClient(
+        {
+            "scientific_name": None,
+            "common_name": None,
+            "difficulty": "unknown",
+            "temperament": "unknown",
+            "plant_safe": "unknown",
+        },
+        usage=_Usage(input_tokens=120, output_tokens=45),
+    )
+
+    ClaudeEnricher(client, model="claude-test").enrich(
+        "Leaf Fish", category="Monster/Oddball", size="-"
+    )
+
+    by_attrs = {
+        frozenset(attrs.items()): value
+        for attrs, value in telemetry.points("fishpage.enrichment.tokens")
+    }
+    assert by_attrs[frozenset({"direction": "input", "model": "claude-test"}.items())] == 120
+    assert by_attrs[frozenset({"direction": "output", "model": "claude-test"}.items())] == 45
+
+
+def test_enrich_counts_token_spend_even_when_the_tool_call_is_missing(telemetry):
+    # A response that is billed but omits the tool call still has its spend counted: usage is
+    # recorded before the parse, so the tokens survive the ValueError the missing call raises.
+    class _BilledButEmptyClient:
+        messages = None
+
+        def create(self, **kwargs) -> _Response:
+            return _Response(usage=_Usage(input_tokens=80, output_tokens=10))
+
+    client = _BilledButEmptyClient()
+    client.messages = client
+
+    with pytest.raises(ValueError):
+        ClaudeEnricher(client, model="claude-test").enrich(
+            "Leaf Fish", category="Monster/Oddball", size="-"
+        )
+
+    assert telemetry.counter("fishpage.enrichment.tokens") == 90
+
+
+def test_a_fake_enricher_records_no_token_spend(telemetry):
+    # The injected fake makes no call and sees no usage, so it records nothing — correct by
+    # construction, since recording lives in the Claude-backed enricher that makes the real call.
+    canned = EnrichmentResult(
+        scientific_name=None,
+        common_name=None,
+        difficulty=Difficulty.UNKNOWN,
+        temperament=Temperament.UNKNOWN,
+        plant_safe=PlantSafe.UNKNOWN,
+    )
+
+    FakeEnricher(canned).enrich("Leaf Fish", category="Monster/Oddball", size="-")
+
+    assert "fishpage.enrichment.tokens" not in telemetry.metric_names()
 
 
 def test_enrichment_is_off_by_default_so_no_credentials_are_needed():

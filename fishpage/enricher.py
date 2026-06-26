@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import Any, Protocol, runtime_checkable
 
+from fishpage import observability
 from fishpage.config import Settings
 
 DEFAULT_MODEL = "claude-sonnet-4-6"
@@ -151,6 +152,13 @@ class ClaudeEnricher:
             tools=[build_tool()],
             tool_choice={"type": "tool", "name": _TOOL_NAME},
             messages=[{"role": "user", "content": _prompt(trade_name, category, size)}],
+        )
+        # Recorded before the parse so a response that is billed but omits the tool call still has
+        # its spend counted rather than lost to the parse error below.
+        observability.record_enrichment_tokens(
+            response.usage.input_tokens,
+            response.usage.output_tokens,
+            model=self._model,
         )
         for block in response.content:
             if getattr(block, "type", None) == "tool_use" and block.name == _TOOL_NAME:
