@@ -144,3 +144,22 @@ this repo keeps rotting facts out of code. Tokens are the durable primitive; dol
 Grafana from the token counters with a price variable, so a reprice edits a dashboard, not the app.
 The `model` tag is stamped even though only the Sonnet default is wired today, so the spend split is
 already in place if the Haiku cost fallback this ADR describes is ever implemented.
+
+## Amendment (2026-06-26): auto-images gate on a strain flag, not species resolution
+
+This ADR's "manual upload remains the primary path" for line-bred strains needs a mechanism, and the
+obvious one — fetch an image whenever the LLM resolves a non-`null` species — does not work. A strain
+resolves to a real species *with confidence* (a "Gold Marble Angel" → *Pterophyllum scalare*), so the
+`null`-guard would happily store the wild-type photo — the wrong fish — for the ~23% of the catalog
+that is strain-specific (the spike sample's finding). The `null`-guard catches the *unresolved* tail;
+it does nothing for the *resolved-but-it's-a-strain* case.
+
+So the enrichment call gains a `strain_specific` boolean — the model already distinguishes a fancy
+strain from a wild type — and automatic image acquisition fires only when the species is non-`null`
+*and* `strain_specific` is false. Strains and the unresolved tail get no auto-image and fall back to
+manual upload, the same honest-gap outcome this ADR already prefers; the manual image, once attached,
+is un-clobberable per the Provenance split above. A category suppression list (skip the
+predominantly-line-bred Derived Categories) was considered and rejected as both over- and
+under-inclusive: it skips the true wild-types inside line-bred categories and misses the strains
+hiding in wild-type ones.
+
