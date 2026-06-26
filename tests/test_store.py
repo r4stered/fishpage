@@ -14,7 +14,6 @@ from fishpage.store import (
     all_images,
     all_items,
     attach_image,
-    classifier_overrides_for,
     clear_enrichment,
     enrichment_for,
     image_for,
@@ -238,7 +237,7 @@ def test_a_manual_classifier_override_round_trips(tmp_path):
 
     # The correction is read back keyed by Classifier; its presence in this table *is* manual
     # Provenance — the resolve-on-read layer needs nothing more to mark it a human fact.
-    assert classifier_overrides_for(conn, "110042") == {"difficulty": "beginner"}
+    assert all_classifier_overrides(conn) == {"110042": {"difficulty": "beginner"}}
 
 
 def test_overriding_the_same_classifier_again_replaces_the_value(tmp_path):
@@ -250,7 +249,7 @@ def test_overriding_the_same_classifier_again_replaces_the_value(tmp_path):
 
     # A second correction supersedes the first rather than accumulating rows — one human value per
     # Classifier per SKU, the table's (sku, key) primary key.
-    assert classifier_overrides_for(conn, "110042") == {"difficulty": "advanced"}
+    assert all_classifier_overrides(conn) == {"110042": {"difficulty": "advanced"}}
 
 
 def test_an_override_outside_the_vocabulary_is_rejected(tmp_path):
@@ -263,7 +262,7 @@ def test_an_override_outside_the_vocabulary_is_rejected(tmp_path):
         set_classifier_override(conn, "110042", "difficulty", "trivial")
     with pytest.raises(ValueError):
         set_classifier_override(conn, "110042", "color", "blue")
-    assert classifier_overrides_for(conn, "110042") == {}
+    assert all_classifier_overrides(conn) == {}
 
 
 def test_all_enrichments_reads_every_persisted_ai_row_keyed_by_sku(tmp_path):

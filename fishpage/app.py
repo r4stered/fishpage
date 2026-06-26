@@ -52,18 +52,6 @@ def _upload_error(message: str) -> HTMLResponse:
     return HTMLResponse(render_upload(message=message, error=True), status_code=400)
 
 
-def _item_dict(item: Item) -> dict:
-    return {
-        "sku": item.sku,
-        "size": item.size,
-        "name": item.name,
-        "retail_price": str(item.retail_price),
-        "special_price": None if item.special_price is None else str(item.special_price),
-        "qty_avail": item.qty_avail,
-        "category": item.category,
-    }
-
-
 def create_app(
     conn: sqlite3.Connection,
     *,
@@ -311,35 +299,6 @@ def create_app(
             overrides=all_classifier_overrides(conn),
         )
         return filter_cards_by_classifiers(cards, selected_classifiers)
-
-    @app.get("/catalog")
-    def catalog(
-        include_out_of_stock: bool = False,
-        category: str | None = None,
-        size: str | None = None,
-        on_special: bool = False,
-        search: str = "",
-        sort: str = "",
-        difficulty: list[str] = Query(default=[]),
-        temperament: list[str] = Query(default=[]),
-        plant_safe: list[str] = Query(default=[]),
-    ) -> JSONResponse:
-        items = all_items(conn, include_out_of_stock=include_out_of_stock)
-        items = browse(
-            items,
-            category=category,
-            size=size,
-            on_special=on_special,
-            search=search,
-            sort=sort,
-        )
-        selected = {
-            "difficulty": set(difficulty),
-            "temperament": set(temperament),
-            "plant_safe": set(plant_safe),
-        }
-        cards = _filtered_cards(items, selected)
-        return JSONResponse([_item_dict(card.item) for card in cards])
 
     @app.get("/", response_class=HTMLResponse)
     def index(

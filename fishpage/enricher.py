@@ -135,18 +135,13 @@ class Enricher(Protocol):
     def enrich(self, trade_name: str, *, category: str, size: str) -> EnrichmentResult: ...
 
 
-class _MessagesClient(Protocol):
-    @property
-    def messages(self) -> Any: ...
-
-
 class ClaudeEnricher:
     """An :class:`Enricher` backed by one forced, constrained-schema Claude tool call.
 
     The client is injected so the parse-and-prompt logic is exercised by a fake with no network.
     """
 
-    def __init__(self, client: _MessagesClient, *, model: str = DEFAULT_MODEL):
+    def __init__(self, client: Any, *, model: str = DEFAULT_MODEL):
         self._client = client
         self._model = model
 
