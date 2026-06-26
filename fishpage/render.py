@@ -1,10 +1,12 @@
 """Render the catalog grid: one card per Item."""
 
+from decimal import Decimal
 from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from fishpage.catalog import CLASSIFIERS, Card
+from fishpage.models import PickLine
 
 _env = Environment(
     loader=FileSystemLoader(Path(__file__).parent / "templates"),
@@ -89,6 +91,23 @@ def render_catalog(
         selected_classifiers=selected_classifiers or {},
         images_enabled=images_enabled,
     )
+
+
+def render_pick_button(sku: str, *, on_list: bool) -> str:
+    """Render the card's Pick-list control: the "Add to Pick list" button, or — once the Item is on
+    the list — the non-actionable "On Pick list ✓" marker the add swaps in over the button."""
+    return _env.get_template("_pick_button.html").render(sku=sku, on_list=on_list)
+
+
+def render_pick_list_fragment(lines: list[PickLine], total: Decimal) -> str:
+    """Render just the Pick-list table fragment — the swap target. A quantity change or a line
+    removal returns this so the lines and the running total below them stay in step in one swap."""
+    return _env.get_template("_pick_list.html").render(lines=lines, total=total)
+
+
+def render_pick_list(lines: list[PickLine], total: Decimal) -> str:
+    """Render the whole Pick-list page: the chrome plus the same fragment an HTMX mutation swaps."""
+    return _env.get_template("pick_list.html").render(lines=lines, total=total)
 
 
 def render_upload(*, message: str = "", error: bool = False) -> str:

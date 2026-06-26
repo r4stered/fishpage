@@ -2,7 +2,10 @@
 {% block title %}Fishpage — Catalog{% endblock %}
 {% block body %}
   <h1>Catalog</h1>
-  <p><a class="button" href="/upload">Upload a Stocklist</a></p>
+  <p>
+    <a class="button" href="/upload">Upload a Stocklist</a>
+    <a class="button" href="/pick-list">Pick list</a>
+  </p>
   <form class="filters" method="get" action="/"
         hx-get="/" hx-target=".catalog-grid" hx-swap="outerHTML"
         hx-push-url="true" hx-trigger="change, submit">

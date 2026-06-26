@@ -95,6 +95,23 @@ MIGRATIONS: list[tuple[int, str]] = [
         ALTER TABLE image ADD COLUMN uploaded_at TEXT;
         """,
     ),
+    (
+        5,
+        # The Pick list: the Items an Actor has gathered to order, held per Actor and keyed by the
+        # Cloudflare Access email. This is the app's first owned per-Actor persisted state. The
+        # composite (actor, sku) primary key is what makes a repeated add idempotent — a second add
+        # of the same SKU collides on the key rather than duplicating the line — and what isolates
+        # one Actor's list from another's. Quantity defaults to 1: gathering an Item means wanting
+        # one of it until the buyer says otherwise.
+        """
+        CREATE TABLE IF NOT EXISTS pick_list (
+            actor    TEXT NOT NULL,
+            sku      TEXT NOT NULL,
+            quantity INTEGER NOT NULL DEFAULT 1,
+            PRIMARY KEY (actor, sku)
+        );
+        """,
+    ),
 ]
 
 

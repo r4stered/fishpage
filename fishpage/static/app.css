@@ -525,3 +525,89 @@ a {
   font-size: 0.75rem;
   white-space: nowrap;
 }
+
+/* Add-to-Pick-list: the card's gather action and the marker the HTMX add swaps in over it. The
+   marker reads as a quiet confirmation, not a button, so a gathered Item is legible at a glance. */
+.card .add-to-pick-list {
+  margin-top: 0.25rem;
+  padding: 0.4rem 0.6rem;
+  font: inherit;
+  font-size: 0.8rem;
+  color: var(--accent);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+
+.card .add-to-pick-list:hover {
+  border-color: var(--accent);
+}
+
+.card .pick-added {
+  margin-top: 0.25rem;
+  padding: 0.4rem 0.6rem;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+/* Pick-list view: the gathered lines as a plain table, with the running total in the footer. Kept
+   greyscale like the rest of the catalog — the table rules carry the structure, not color. */
+.pick-list-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.pick-list-table th,
+.pick-list-table td {
+  padding: 0.5rem 0.6rem;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+
+.pick-list-table thead th {
+  font-size: 0.75rem;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.pick-list-table .pick-quantity {
+  display: inline-flex;
+  gap: 0.35rem;
+}
+
+.pick-list-table .pick-quantity input {
+  width: 4rem;
+  padding: 0.25rem 0.35rem;
+  font: inherit;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.pick-list-table .pick-quantity button,
+.pick-list-table .pick-remove button {
+  font: inherit;
+  font-size: 0.8rem;
+  color: var(--accent);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.25rem 0.5rem;
+  cursor: pointer;
+}
+
+.pick-list-table .pick-total {
+  font-weight: 600;
+}
+
+.pick-list-table .pick-total td {
+  border-bottom: none;
+  border-top: 2px solid var(--border);
+}
+
+.pick-list-empty {
+  color: var(--muted);
+}

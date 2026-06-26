@@ -2,6 +2,7 @@
 
 import logging
 import sqlite3
+from decimal import Decimal
 from pathlib import Path
 
 from fastapi import FastAPI, Form, Header, Query, Request, UploadFile
@@ -15,8 +16,17 @@ from fishpage.catalog import build_cards, filter_cards_by_classifiers
 from fishpage.images import ImageDecodeError, ImageStore, store_image
 from fishpage.ingest import ingest_pending, stocklist_date
 from fishpage.models import Item, Provenance
-from fishpage.render import render_cards, render_catalog, render_grid, render_upload
+from fishpage.render import (
+    render_cards,
+    render_catalog,
+    render_grid,
+    render_pick_button,
+    render_pick_list,
+    render_pick_list_fragment,
+    render_upload,
+)
 from fishpage.store import (
+    add_to_pick_list,
     all_classifier_overrides,
     all_enrichments,
     all_images,
@@ -25,7 +35,10 @@ from fishpage.store import (
     image_for,
     item_exists,
     latest_stocklist_date,
+    pick_list_for,
+    remove_from_pick_list,
     set_classifier_override,
+    set_pick_list_quantity,
 )
 
 _STATIC = Path(__file__).parent / "static"
@@ -202,6 +215,66 @@ def create_app(
         # Post/redirect/get back to the catalog so the form lands on the refreshed grid — the card
         # now shows the manual badge — without re-posting on reload, and works with no JS.
         return RedirectResponse(url="/", status_code=303)
+
+    def _pick_list_state(actor: str) -> tuple[list, Decimal]:
+        # The Actor's lines plus their running total — the one read both the view and every mutating
+        # route render from, so the total is summed in exactly one place.
+        lines = pick_list_for(conn, actor)
+        return lines, sum((line.line_total for line in lines), Decimal("0"))
+
+    @app.post("/pick-list/{sku}", response_class=HTMLResponse)
+    def pick_list_add(
+        sku: str,
+        access_email: str | None = Header(default=None, alias=ACCESS_EMAIL_HEADER),
+        hx_request: str | None = Header(default=None),
+    ) -> Response:
+        # Gather an Item onto the current Actor's Pick list. The list is keyed by the Access email —
+        # off the edge the neutral placeholder Actor owns it, the same fallback the rest of the app
+        # uses. A repeated add is idempotent in the store, so a double-click never duplicates it.
+        if not item_exists(conn, sku):
+            return JSONResponse({"detail": f"unknown SKU {sku}"}, status_code=404)
+        add_to_pick_list(conn, actor_from_header(access_email), sku)
+        if hx_request:
+            # Swap the card's button for the non-actionable "on pick list" marker.
+            return HTMLResponse(render_pick_button(sku, on_list=True))
+        # Post/redirect/get back to the catalog so a no-JS add lands on a full page, not a fragment.
+        return RedirectResponse(url="/", status_code=303)
+
+    @app.post("/pick-list/{sku}/quantity", response_class=HTMLResponse)
+    def pick_list_set_quantity(
+        sku: str,
+        quantity: int = Form(...),
+        access_email: str | None = Header(default=None, alias=ACCESS_EMAIL_HEADER),
+        hx_request: str | None = Header(default=None),
+    ) -> Response:
+        actor = actor_from_header(access_email)
+        set_pick_list_quantity(conn, actor, sku, quantity)
+        if hx_request:
+            # Swap the whole list fragment so the changed line and the running total stay in step.
+            return HTMLResponse(render_pick_list_fragment(*_pick_list_state(actor)))
+        return RedirectResponse(url="/pick-list", status_code=303)
+
+    @app.post("/pick-list/{sku}/remove", response_class=HTMLResponse)
+    def pick_list_remove(
+        sku: str,
+        access_email: str | None = Header(default=None, alias=ACCESS_EMAIL_HEADER),
+        hx_request: str | None = Header(default=None),
+    ) -> Response:
+        actor = actor_from_header(access_email)
+        remove_from_pick_list(conn, actor, sku)
+        if hx_request:
+            return HTMLResponse(render_pick_list_fragment(*_pick_list_state(actor)))
+        return RedirectResponse(url="/pick-list", status_code=303)
+
+    @app.get("/pick-list", response_class=HTMLResponse)
+    def pick_list_view(
+        access_email: str | None = Header(default=None, alias=ACCESS_EMAIL_HEADER),
+        hx_request: str | None = Header(default=None),
+    ) -> HTMLResponse:
+        lines, total = _pick_list_state(actor_from_header(access_email))
+        if hx_request:
+            return HTMLResponse(render_pick_list_fragment(lines, total))
+        return HTMLResponse(render_pick_list(lines, total))
 
     @app.get("/healthz")
     def healthz() -> JSONResponse:
