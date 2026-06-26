@@ -24,6 +24,8 @@ from fishpage.enricher import (
 class FakeEnricher:
     """A canned :class:`Enricher` for tests that inject the dependency, never the network."""
 
+    model = "fake-model"
+
     def __init__(self, result: EnrichmentResult):
         self._result = result
 
