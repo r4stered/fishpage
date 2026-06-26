@@ -16,6 +16,7 @@
   <span class="special-price">special ${{ item.special_price }}</span>
   {% endif %}
   <span class="qty">{{ item.qty_avail }} available</span>
+  {% with sku = item.sku, on_list = False %}{% include "_pick_button.html" %}{% endwith %}
   {% if card.classifiers %}
   <ul class="badges">
     {% for c in card.classifiers %}

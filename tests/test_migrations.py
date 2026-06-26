@@ -31,7 +31,7 @@ def test_a_fresh_database_is_brought_up_to_the_baseline_schema(tmp_path):
 
     # The baseline migration creates the v1 items table; later migrations then carry the fresh
     # database forward to the latest version.
-    assert version == 4
+    assert version == 5
     columns = {row[1] for row in conn.execute("PRAGMA table_info(items)")}
     assert "sku" in columns and "reuse_flagged" in columns
 
@@ -41,7 +41,7 @@ def test_re_running_on_an_up_to_date_database_is_a_noop(tmp_path):
     migrate(conn)
 
     # A second boot must not re-apply or error; the version stays put.
-    assert migrate(conn) == 4
+    assert migrate(conn) == 5
 
 
 def test_a_populated_pre_runner_database_keeps_its_rows_and_is_stamped(tmp_path):
@@ -57,7 +57,7 @@ def test_a_populated_pre_runner_database_keeps_its_rows_and_is_stamped(tmp_path)
 
     # The baseline meets an existing table as a no-op: the row survives while the database is
     # carried forward to the latest version so later migrations build on it.
-    assert version == 4
+    assert version == 5
     rows = conn.execute("SELECT sku, name FROM items").fetchall()
     assert rows == [("110042", "Bichir Ornate")]
 
@@ -118,8 +118,21 @@ def test_the_enrichment_schema_migration_creates_both_enrichment_tables(tmp_path
 
     # The phase-2 Enrichment schema lands as the migration after the v1 baseline; the runner then
     # carries the database on to the latest version.
-    assert version == 4
+    assert version == 5
     assert {"enrichment", "classifier_override"} <= table_names(conn)
+
+
+def test_the_pick_list_migration_creates_the_per_actor_table(tmp_path):
+    conn = fresh_conn()
+
+    migrate(conn)
+
+    # The Pick-list table lands via the runner, keyed by (actor, sku) so a repeated add is
+    # idempotent and one Actor's list is isolated from another's.
+    assert "pick_list" in table_names(conn)
+    info = conn.execute("PRAGMA table_info(pick_list)").fetchall()
+    assert {row[1] for row in info} >= {"actor", "sku", "quantity"}
+    assert {row[1] for row in info if row[5]} == {"actor", "sku"}
 
 
 def enrichment_columns(conn):
@@ -259,7 +272,7 @@ def test_the_enrichment_migration_is_additive_on_a_populated_database(tmp_path):
 
     # The first real migrations against the live, populated database: existing Items are untouched
     # and the new tables land empty alongside them — no data loss.
-    assert version == 4
+    assert version == 5
     assert conn.execute("SELECT sku, name FROM items").fetchall() == [("110042", "Bichir Ornate")]
     assert conn.execute("SELECT count(*) FROM enrichment").fetchone()[0] == 0
     assert conn.execute("SELECT count(*) FROM classifier_override").fetchone()[0] == 0

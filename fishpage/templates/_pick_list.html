@@ -1,0 +1,49 @@
+<div class="pick-list" id="pick-list">
+{% if lines %}
+  <table class="pick-list-table">
+    <thead>
+      <tr>
+        <th>SKU</th><th>Name</th><th>Price</th><th>Quantity</th><th>Line total</th><th></th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for line in lines %}
+      <tr class="pick-line" data-sku="{{ line.item.sku }}">
+        <td class="sku">{{ line.item.sku }}</td>
+        <td class="name">{{ line.item.name }}</td>
+        <td class="price">${{ line.item.effective_price }}</td>
+        <td class="quantity">
+          {# change on the input and a no-JS submit both post the new quantity; the whole list
+             fragment swaps back so the running total below stays in step with the lines. #}
+          <form class="pick-quantity" method="post"
+                action="/pick-list/{{ line.item.sku }}/quantity"
+                hx-post="/pick-list/{{ line.item.sku }}/quantity"
+                hx-target="#pick-list" hx-swap="outerHTML" hx-trigger="change, submit">
+            <input type="number" name="quantity" value="{{ line.quantity }}" min="1">
+            <button type="submit">Update</button>
+          </form>
+        </td>
+        <td class="line-total">${{ line.line_total }}</td>
+        <td class="remove">
+          <form class="pick-remove" method="post"
+                action="/pick-list/{{ line.item.sku }}/remove"
+                hx-post="/pick-list/{{ line.item.sku }}/remove"
+                hx-target="#pick-list" hx-swap="outerHTML">
+            <button type="submit">Remove</button>
+          </form>
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+    <tfoot>
+      <tr class="pick-total">
+        <td colspan="4">Total</td>
+        <td class="running-total">${{ total }}</td>
+        <td></td>
+      </tr>
+    </tfoot>
+  </table>
+{% else %}
+  <p class="pick-list-empty">Your Pick list is empty.</p>
+{% endif %}
+</div>

@@ -16,7 +16,7 @@ from fishpage import observability
 from fishpage.catalog import classifier_spec
 from fishpage.enricher import Difficulty, EnrichmentResult, PlantSafe, Temperament
 from fishpage.migrations import migrate
-from fishpage.models import ImageRecord, Item, Provenance
+from fishpage.models import ImageRecord, Item, PickLine, Provenance
 
 _log = logging.getLogger(__name__)
 
@@ -400,3 +400,51 @@ def _row_to_item(row: sqlite3.Row) -> Item:
         last_seen=last_seen,
         reuse_flagged=bool(row["reuse_flagged"]),
     )
+
+
+def add_to_pick_list(conn: sqlite3.Connection, actor: str, sku: str) -> None:
+    """Gather an Item onto an Actor's Pick list at quantity 1, idempotently.
+
+    Adding a SKU already on the Actor's list is a no-op: the ``(actor, sku)`` primary key collides
+    and ``DO NOTHING`` leaves the existing line — and its quantity — untouched, so a double-add
+    never duplicates a line or resets a quantity the buyer already set.
+    """
+    conn.execute(
+        "INSERT INTO pick_list (actor, sku, quantity) VALUES (?, ?, 1) "
+        "ON CONFLICT(actor, sku) DO NOTHING",
+        (actor, sku),
+    )
+    conn.commit()
+
+
+def set_pick_list_quantity(conn: sqlite3.Connection, actor: str, sku: str, quantity: int) -> None:
+    """Set how many of one gathered Item the Actor wants. A no-op if the SKU is not on the list."""
+    conn.execute(
+        "UPDATE pick_list SET quantity = ? WHERE actor = ? AND sku = ?",
+        (quantity, actor, sku),
+    )
+    conn.commit()
+
+
+def remove_from_pick_list(conn: sqlite3.Connection, actor: str, sku: str) -> None:
+    """Drop one line from the Actor's Pick list. A no-op if the SKU is not on their list."""
+    conn.execute("DELETE FROM pick_list WHERE actor = ? AND sku = ?", (actor, sku))
+    conn.commit()
+
+
+def pick_list_for(conn: sqlite3.Connection, actor: str) -> list[PickLine]:
+    """The Actor's Pick list, each line carrying its whole Item and the wanted quantity.
+
+    Keyed by Actor, so one Actor never sees another's list. The join to ``items`` is inner: a line
+    whose SKU is somehow absent from the catalog has no Item to show and is simply not returned.
+    Ordered by SKU for a stable view across reads.
+    """
+    rows = conn.execute(
+        "SELECT p.quantity AS quantity, "
+        "i.sku, i.size, i.name, i.retail_price, i.special_price, i.qty_avail, "
+        "i.last_seen, i.reuse_flagged "
+        "FROM pick_list p JOIN items i ON i.sku = p.sku "
+        "WHERE p.actor = ? ORDER BY i.sku",
+        (actor,),
+    ).fetchall()
+    return [PickLine(item=_row_to_item(row), quantity=row["quantity"]) for row in rows]

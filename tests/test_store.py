@@ -8,6 +8,7 @@ from fishpage.enricher import Difficulty, EnrichmentResult, PlantSafe, Temperame
 from fishpage.migrations import MIGRATIONS, schema_version
 from fishpage.models import ImageRecord, Item, Provenance
 from fishpage.store import (
+    add_to_pick_list,
     all_classifier_overrides,
     all_enrichments,
     all_images,
@@ -20,8 +21,11 @@ from fishpage.store import (
     latest_stocklist_date,
     open_store,
     persist_enrichment,
+    pick_list_for,
     reconcile,
+    remove_from_pick_list,
     set_classifier_override,
+    set_pick_list_quantity,
     unenriched_items,
 )
 
@@ -306,3 +310,77 @@ def test_all_classifier_overrides_groups_corrections_by_sku(tmp_path):
         "110042": {"difficulty": "beginner", "temperament": "peaceful"},
         "110092": {"plant_safe": "unsafe"},
     }
+
+
+def test_add_to_pick_list_puts_a_line_on_the_actors_list_at_quantity_one(tmp_path):
+    conn = open_store(tmp_path / "fishpage.db")
+    reconcile(conn, [ORNATE_M], JUN19)
+
+    add_to_pick_list(conn, "buyer@sdc.test", "110042")
+
+    lines = pick_list_for(conn, "buyer@sdc.test")
+    assert [(line.item.sku, line.quantity) for line in lines] == [("110042", 1)]
+
+
+def test_adding_an_item_already_on_the_list_is_idempotent(tmp_path):
+    conn = open_store(tmp_path / "fishpage.db")
+    reconcile(conn, [ORNATE_M], JUN19)
+    add_to_pick_list(conn, "buyer@sdc.test", "110042")
+    set_pick_list_quantity(conn, "buyer@sdc.test", "110042", 5)
+
+    add_to_pick_list(conn, "buyer@sdc.test", "110042")
+
+    # A second add of the same SKU neither duplicates the line nor resets the quantity the buyer
+    # already chose — the composite key collides and the existing line stands.
+    lines = pick_list_for(conn, "buyer@sdc.test")
+    assert [(line.item.sku, line.quantity) for line in lines] == [("110042", 5)]
+
+
+def test_a_pick_line_carries_name_and_effective_price(tmp_path):
+    conn = open_store(tmp_path / "fishpage.db")
+    reconcile(conn, [LEAF], JUN19)  # LEAF has a Special price
+    add_to_pick_list(conn, "buyer@sdc.test", "110092")
+    set_pick_list_quantity(conn, "buyer@sdc.test", "110092", 3)
+
+    [line] = pick_list_for(conn, "buyer@sdc.test")
+
+    # The line shows the Item's name and the price that actually applies — the Special price wins —
+    # and the line total is that effective price times the quantity.
+    assert line.item.name == "Leaf Fish Leopard Ctenopoma"
+    assert line.item.effective_price == Decimal("4.99")
+    assert line.line_total == Decimal("14.97")
+
+
+def test_setting_quantity_changes_the_line(tmp_path):
+    conn = open_store(tmp_path / "fishpage.db")
+    reconcile(conn, [ORNATE_M], JUN19)
+    add_to_pick_list(conn, "buyer@sdc.test", "110042")
+
+    set_pick_list_quantity(conn, "buyer@sdc.test", "110042", 7)
+
+    [line] = pick_list_for(conn, "buyer@sdc.test")
+    assert line.quantity == 7
+
+
+def test_removing_a_line_drops_it_from_the_list(tmp_path):
+    conn = open_store(tmp_path / "fishpage.db")
+    reconcile(conn, [ORNATE_M, LEAF], JUN19)
+    add_to_pick_list(conn, "buyer@sdc.test", "110042")
+    add_to_pick_list(conn, "buyer@sdc.test", "110092")
+
+    remove_from_pick_list(conn, "buyer@sdc.test", "110042")
+
+    lines = pick_list_for(conn, "buyer@sdc.test")
+    assert [line.item.sku for line in lines] == ["110092"]
+
+
+def test_one_actor_never_sees_anothers_pick_list(tmp_path):
+    conn = open_store(tmp_path / "fishpage.db")
+    reconcile(conn, [ORNATE_M, LEAF], JUN19)
+    add_to_pick_list(conn, "alice@sdc.test", "110042")
+    add_to_pick_list(conn, "bob@sdc.test", "110092")
+
+    # The list is keyed by Actor, so each buyer's gathered Items are theirs alone — Bob's add never
+    # bleeds into Alice's list and vice versa.
+    assert [line.item.sku for line in pick_list_for(conn, "alice@sdc.test")] == ["110042"]
+    assert [line.item.sku for line in pick_list_for(conn, "bob@sdc.test")] == ["110092"]

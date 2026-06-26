@@ -72,3 +72,20 @@ class Item:
     def effective_price(self) -> Decimal:
         """The price that actually applies: the Special price when present, else Retail."""
         return self.retail_price if self.special_price is None else self.special_price
+
+
+@dataclass(frozen=True)
+class PickLine:
+    """One line of an Actor's Pick list: an Item gathered to order, with how many of it are wanted.
+
+    The Item is carried whole so a line shows its SKU, name, and effective price without a second
+    read, and ``line_total`` is what that line contributes to the Pick list's running total.
+    """
+
+    item: Item
+    quantity: int
+
+    @property
+    def line_total(self) -> Decimal:
+        """What this line adds to the running total: effective price times the quantity."""
+        return self.item.effective_price * self.quantity

@@ -1,0 +1,6 @@
+{% if on_list %}
+<span class="pick-added">On Pick list ✓</span>
+{% else %}
+<button class="add-to-pick-list"
+        hx-post="/pick-list/{{ sku }}" hx-swap="outerHTML">Add to Pick list</button>
+{% endif %}
