@@ -1,5 +1,6 @@
 """FastAPI catalog layer: serve stored Items as JSON and as a grid of cards."""
 
+import logging
 import sqlite3
 from pathlib import Path
 
@@ -8,7 +9,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Resp
 from fastapi.staticfiles import StaticFiles
 
 from fishpage import observability
-from fishpage.access import ACCESS_EMAIL_HEADER, uploader_from_header
+from fishpage.access import ACCESS_EMAIL_HEADER, actor_from_header
 from fishpage.browse import SIZE_GRADES, browse
 from fishpage.catalog import build_cards, filter_cards_by_classifiers
 from fishpage.images import ImageDecodeError, ImageStore, store_image
@@ -28,6 +29,8 @@ from fishpage.store import (
 )
 
 _STATIC = Path(__file__).parent / "static"
+
+_log = logging.getLogger("fishpage")
 
 
 def _upload_error(message: str) -> HTMLResponse:
@@ -66,7 +69,10 @@ def create_app(
         return HTMLResponse(render_upload())
 
     @app.post("/upload", response_class=HTMLResponse)
-    async def upload(file: UploadFile) -> HTMLResponse:
+    async def upload(
+        file: UploadFile,
+        access_email: str | None = Header(default=None, alias=ACCESS_EMAIL_HEADER),
+    ) -> HTMLResponse:
         assert incoming_dir is not None and processed_dir is not None
         name = Path(file.filename or "").name
         try:
@@ -87,6 +93,14 @@ def create_app(
         ingested = ingest_pending(conn, incoming_dir, processed_dir)
         if any(path.name == name for path in ingested):
             total = len(all_items(conn, include_out_of_stock=True))
+            # Audit the mutation: a Stocklist landed through the HTTP route. The Actor and file name
+            # ride as indexed fields, so the upload joins the same actor query as overrides and
+            # re-enrichments.
+            _log.info(
+                "Stocklist %s ingested",
+                name,
+                extra={"actor": actor_from_header(access_email), "file": name},
+            )
             return HTMLResponse(
                 render_upload(message=f"Ingested {name}. The catalog now holds {total} Items.")
             )
@@ -127,7 +141,7 @@ def create_app(
                 sku,
                 await file.read(),
                 provenance=Provenance.MANUAL,
-                uploaded_by=uploader_from_header(access_email),
+                uploaded_by=actor_from_header(access_email),
                 max_dimension=image_max_dimension,
             )
         except ImageDecodeError:
@@ -153,7 +167,12 @@ def create_app(
         return Response(content=stored.data, media_type=stored.content_type)
 
     @app.post("/items/{sku}/classifier")
-    def override_classifier(sku: str, key: str = Form(...), value: str = Form(...)) -> Response:
+    def override_classifier(
+        sku: str,
+        key: str = Form(...),
+        value: str = Form(...),
+        access_email: str | None = Header(default=None, alias=ACCESS_EMAIL_HEADER),
+    ) -> Response:
         # A human correction: write a manual override that wins on read and survives re-enrichment.
         # The value is validated against the curated vocabulary, so an out-of-vocabulary correction
         # is a 400 rather than a stored value the catalog could never have produced itself.
@@ -163,6 +182,19 @@ def create_app(
             set_classifier_override(conn, sku, key, value)
         except ValueError as exc:
             return JSONResponse({"detail": str(exc)}, status_code=400)
+        # Audit the mutation: the Actor, SKU, and the corrected Classifier ride as indexed fields,
+        # so a human correction joins the same actor query as uploads and re-enrichments.
+        _log.info(
+            "Classifier %s overridden for %s",
+            key,
+            sku,
+            extra={
+                "actor": actor_from_header(access_email),
+                "sku": sku,
+                "classifier": key,
+                "value": value,
+            },
+        )
         # Post/redirect/get back to the catalog so the form lands on the refreshed grid — the card
         # now shows the manual badge — without re-posting on reload, and works with no JS.
         return RedirectResponse(url="/", status_code=303)
@@ -172,13 +204,23 @@ def create_app(
         return JSONResponse({"status": "ok"})
 
     @app.post("/enrich/{sku}")
-    def reenrich(sku: str) -> JSONResponse:
+    def reenrich(
+        sku: str,
+        access_email: str | None = Header(default=None, alias=ACCESS_EMAIL_HEADER),
+    ) -> JSONResponse:
         # On-demand re-enrich: clear the SKU's AI row so it falls back into the un-enriched queue,
         # where the background drainer refills it. Only the enrichment row goes — a human's manual
         # override lives in a separate table and is left intact, so a correction survives a re-run.
         if not item_exists(conn, sku):
             return JSONResponse({"detail": f"unknown SKU {sku}"}, status_code=404)
         clear_enrichment(conn, sku)
+        # Audit the mutation: the Actor and SKU ride as indexed fields, so an on-demand re-enrich
+        # joins the same actor query as uploads and overrides.
+        _log.info(
+            "Re-enrich queued for %s",
+            sku,
+            extra={"actor": actor_from_header(access_email), "sku": sku},
+        )
         return JSONResponse({"sku": sku, "status": "queued"})
 
     def _filtered_cards(items: list[Item], selected_classifiers: dict[str, set[str]]) -> list:

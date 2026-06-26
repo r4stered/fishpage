@@ -1,3 +1,4 @@
+import logging
 from datetime import date
 from decimal import Decimal
 
@@ -95,6 +96,56 @@ def test_reenrich_route_404s_an_unknown_sku(tmp_path):
     # Re-queuing presupposes a real Item; an unknown SKU is a 404, not a silent no-op that would
     # read as success.
     assert resp.status_code == 404
+
+
+def test_reenrich_emits_an_audit_event_crediting_the_access_actor(tmp_path, caplog):
+    conn = open_store(tmp_path / "fishpage.db")
+    reconcile(conn, [ORNATE_M], JUN19)
+    persist_enrichment(conn, "110042", AN_ENRICHMENT)
+    app_client = TestClient(create_app(conn))
+
+    with caplog.at_level(logging.INFO, logger="fishpage"):
+        app_client.post(
+            "/enrich/110042",
+            headers={"Cf-Access-Authenticated-User-Email": "alice@example.com"},
+        )
+
+    # The on-demand re-enrich narrates itself as one INFO event carrying the SKU under the uniform
+    # actor field, so it joins the same "everything this person did" query as uploads and overrides.
+    events = [r for r in caplog.records if getattr(r, "sku", None) == "110042"]
+    assert len(events) == 1
+    assert events[0].actor == "alice@example.com"
+
+
+def test_reenrich_off_the_access_edge_credits_the_neutral_placeholder(tmp_path, caplog):
+    conn = open_store(tmp_path / "fishpage.db")
+    reconcile(conn, [ORNATE_M], JUN19)
+    persist_enrichment(conn, "110042", AN_ENRICHMENT)
+    app_client = TestClient(create_app(conn))
+
+    # No Access header — a local run or the test suite. The mutation still succeeds and the audit
+    # event credits the neutral placeholder rather than going anonymous.
+    with caplog.at_level(logging.INFO, logger="fishpage"):
+        app_client.post("/enrich/110042")
+
+    events = [r for r in caplog.records if getattr(r, "sku", None) == "110042"]
+    assert len(events) == 1
+    assert events[0].actor == "unknown"
+
+
+def test_browsing_gets_emit_no_per_request_actor_log(tmp_path, caplog):
+    app_client = client(tmp_path)
+
+    # Browsing is deliberately not attributed per request: high-volume actor logging on GETs
+    # duplicates what Cloudflare Access's own edge audit logs capture better. Even with an Access
+    # header present, a catalog read and an index render emit no actor-bearing event.
+    with caplog.at_level(logging.INFO, logger="fishpage"):
+        app_client.get("/", headers={"Cf-Access-Authenticated-User-Email": "alice@example.com"})
+        app_client.get(
+            "/catalog", headers={"Cf-Access-Authenticated-User-Email": "alice@example.com"}
+        )
+
+    assert [r for r in caplog.records if getattr(r, "actor", None) is not None] == []
 
 
 def test_requests_are_auto_instrumented_with_a_server_span(tmp_path, telemetry):
@@ -507,6 +558,42 @@ def test_classifier_override_route_404s_an_unknown_sku(tmp_path):
 
     # Correcting presupposes a real Item; an unknown SKU is a 404, not a silent write.
     assert resp.status_code == 404
+
+
+def test_classifier_override_emits_an_audit_event_crediting_the_access_actor(tmp_path, caplog):
+    conn = open_store(tmp_path / "fishpage.db")
+    reconcile(conn, [ORNATE_M], JUN19)
+    app_client = TestClient(create_app(conn))
+
+    with caplog.at_level(logging.INFO, logger="fishpage"):
+        app_client.post(
+            "/items/110042/classifier",
+            data={"key": "difficulty", "value": "beginner"},
+            headers={"Cf-Access-Authenticated-User-Email": "alice@example.com"},
+        )
+
+    # A human correction narrates itself as one INFO event carrying the SKU and the corrected
+    # Classifier under the uniform actor field, so it joins the same actor query as the others.
+    events = [r for r in caplog.records if getattr(r, "sku", None) == "110042"]
+    assert len(events) == 1
+    event = events[0]
+    assert event.actor == "alice@example.com"
+    assert event.classifier == "difficulty"
+
+
+def test_classifier_override_off_the_access_edge_credits_the_neutral_placeholder(tmp_path, caplog):
+    conn = open_store(tmp_path / "fishpage.db")
+    reconcile(conn, [ORNATE_M], JUN19)
+    app_client = TestClient(create_app(conn))
+
+    # No Access header — a local run or the test suite. The correction still lands and the audit
+    # event credits the neutral placeholder rather than going anonymous.
+    with caplog.at_level(logging.INFO, logger="fishpage"):
+        app_client.post("/items/110042/classifier", data={"key": "difficulty", "value": "beginner"})
+
+    events = [r for r in caplog.records if getattr(r, "sku", None) == "110042"]
+    assert len(events) == 1
+    assert events[0].actor == "unknown"
 
 
 def test_classifier_override_route_400s_a_value_outside_the_vocabulary(tmp_path):

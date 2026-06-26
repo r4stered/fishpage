@@ -103,13 +103,13 @@ def store_image(
     except ImageDecodeError:
         observability.record_image_optimize_error(provenance=provenance)
         # The counter is the dashboard signal; the detail of which upload failed rides this log so
-        # the SKU, Uploader, and decode exception stay off the metric. Same indexed fields as the
+        # the SKU, Actor, and decode exception stay off the metric. Same indexed fields as the
         # success event, so both paths narrate alike. Re-raise — the caller turns it into a 400.
         _log.warning(
             "Failed to optimize %s image for %s",
             provenance.value,
             sku,
-            extra={"uploader": uploaded_by, "sku": sku, "provenance": provenance.value},
+            extra={"actor": uploaded_by, "sku": sku, "provenance": provenance.value},
             exc_info=True,
         )
         raise
@@ -128,13 +128,14 @@ def store_image(
         uploaded_at=uploaded_at,
     )
     # One structured event per stored image, emitted at the shared seam so both sources narrate
-    # alike. The Uploader, SKU, and Provenance ride as indexed fields, not text baked into the
-    # message, so the recent-uploads view filters on who attached what within log retention.
+    # alike. The Actor, SKU, and Provenance ride as indexed fields, not text baked into the
+    # message, so "everything this person did" — across uploads, overrides, and re-enrichments — is
+    # a single query on the uniform actor field, within log retention.
     _log.info(
         "Stored %s image for %s",
         provenance.value,
         sku,
-        extra={"uploader": uploaded_by, "sku": sku, "provenance": provenance.value},
+        extra={"actor": uploaded_by, "sku": sku, "provenance": provenance.value},
     )
 
 

@@ -258,13 +258,13 @@ def test_store_image_logs_the_detail_when_optimization_fails(tmp_path, caplog):
         )
 
     # The counter stays cardinality-safe; the detail of which upload failed goes to the log. One
-    # WARNING carries the SKU, Uploader, and Provenance as structured fields plus the decode
+    # WARNING carries the SKU, Actor, and Provenance as structured fields plus the decode
     # exception, so ops can see whose bad file failed without exploding the metric.
     events = [r for r in caplog.records if getattr(r, "sku", None) == "110042"]
     assert len(events) == 1
     event = events[0]
     assert event.levelno == logging.WARNING
-    assert event.uploader == "alice@example.com"
+    assert event.actor == "alice@example.com"
     assert event.provenance == "manual"
     assert event.exc_info is not None
 
@@ -323,14 +323,15 @@ def test_a_successful_upload_emits_a_structured_event(tmp_path, caplog):
             client, "110042", headers={"Cf-Access-Authenticated-User-Email": "alice@example.com"}
         )
 
-    # A successful upload narrates itself as one INFO event carrying the Uploader, SKU, and
-    # Provenance as structured fields — so the recent-uploads view answers "who attached what" from
-    # the logs (within retention) the way the DB answers it forever.
-    events = [r for r in caplog.records if getattr(r, "uploader", None) is not None]
+    # A successful upload narrates itself as one INFO event carrying the Actor, SKU, and
+    # Provenance as structured fields under the uniform actor field — so "everything this person
+    # did" is one query, and the recent-uploads view answers "who attached what" from the logs
+    # (within retention) the way the DB answers it forever.
+    events = [r for r in caplog.records if getattr(r, "actor", None) is not None]
     assert len(events) == 1
     event = events[0]
     assert event.levelno == logging.INFO
-    assert event.uploader == "alice@example.com"
+    assert event.actor == "alice@example.com"
     assert event.sku == "110042"
     assert event.provenance == "manual"
 
