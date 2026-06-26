@@ -52,6 +52,7 @@ class _Instruments:
     image_original_bytes: Counter
     image_optimized_bytes: Counter
     image_optimize_errors: Counter
+    enrichment_tokens: Counter
 
 
 _meter_provider: MeterProvider
@@ -201,6 +202,20 @@ def record_image_optimize_error(*, provenance: Provenance) -> None:
     _instruments.image_optimize_errors.add(1, {"provenance": provenance.value})
 
 
+def record_enrichment_tokens(input_tokens: int, output_tokens: int, *, model: str) -> None:
+    """Record the token spend of one Enrichment call, split by direction and tagged by model.
+
+    Tokens are the durable primitive — dollars are derived downstream in the dashboard from a
+    price variable, never from a price table in the app, so a reprice never touches this code. The
+    ``model`` tag is stamped even though only the default tier is wired today, so the spend split is
+    already in place if the cost-fallback model is ever added.
+
+    The SKU is high-cardinality and rides the per-Item result log, never this counter.
+    """
+    _instruments.enrichment_tokens.add(input_tokens, {"direction": "input", "model": model})
+    _instruments.enrichment_tokens.add(output_tokens, {"direction": "output", "model": model})
+
+
 def track_catalog_freshness(
     conn: sqlite3.Connection,
     *,
@@ -285,6 +300,11 @@ def _install(
             "fishpage.image.optimize_errors",
             unit="{error}",
             description="Images that failed to decode at the optimization seam",
+        ),
+        enrichment_tokens=meter.create_counter(
+            "fishpage.enrichment.tokens",
+            unit="{token}",
+            description="Tokens spent on Enrichment Claude calls, by direction and model",
         ),
     )
 
