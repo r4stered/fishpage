@@ -52,6 +52,17 @@ def _client(tmp_path):
     return TestClient(create_app(conn))
 
 
+def _windowed_client(tmp_path, *, count, page_size):
+    """A catalog of ``count`` in-stock Items behind a tiny ``page_size``, so a handful of Items is
+    enough to exercise windowing without standing up the full ~900-Item Stocklist."""
+    conn = open_store(tmp_path / "fishpage.db")
+    items = [
+        Item(f"1100{n:02d}", "M", f"Tetra {n:02d}", Decimal("4.99"), None, 5) for n in range(count)
+    ]
+    reconcile(conn, items, JUN19)
+    return TestClient(create_app(conn, page_size=page_size))
+
+
 def test_catalog_links_the_stylesheet_once(tmp_path):
     html = _client(tmp_path).get("/").text
 
@@ -318,3 +329,85 @@ def test_each_card_carries_a_stable_id_for_targeted_swaps():
     # A stable per-card id leaves the seam the live-update poll and lazy/pagination work build on:
     # an individually-addressable card for an out-of-band swap, without a whole-grid re-render.
     assert 'id="card-110042"' in html
+
+
+def test_card_images_defer_their_fetch_until_near_the_viewport():
+    sourced = _image_record(attribution="A. Photographer", provenance=Provenance.WIKIMEDIA)
+    with_image = render_grid(_cards([ORNATE_M], images={"110042": sourced}))
+    without_image = render_grid(_cards([ORNATE_M]))
+
+    # Every card image is lazy: a full ~900-Item grid must not fire ~900 image requests on load, so
+    # an <img> off-screen waits to fetch until it nears the viewport. The placeholder defers too —
+    # it is still a request per card otherwise.
+    assert 'loading="lazy"' in with_image
+    assert 'loading="lazy"' in without_image
+
+
+def test_the_first_page_renders_a_bounded_window_and_a_sentinel_for_the_rest(tmp_path):
+    html = _windowed_client(tmp_path, count=5, page_size=2).get("/").text
+
+    # The grid renders only the first window of cards — not all 5 — so a ~900-Item catalog never
+    # builds ~900 cards of DOM at once. A single sentinel marks where the rest will load.
+    assert html.count('class="card"') == 2
+    assert html.count('class="load-more"') == 1
+
+
+def test_no_sentinel_when_the_whole_catalog_fits_in_one_window(tmp_path):
+    html = _windowed_client(tmp_path, count=2, page_size=2).get("/").text
+
+    # With nothing past the first window there is no next page, so no sentinel is drawn — a
+    # load-more that fetched an empty page would loop forever on scroll.
+    assert html.count('class="card"') == 2
+    assert "load-more" not in html
+
+
+def test_the_sentinel_carries_the_active_filters_into_the_next_page(tmp_path):
+    html = (
+        _windowed_client(tmp_path, count=5, page_size=2).get("/", params={"search": "Tetra"}).text
+    )
+    sentinel = html[html.index('class="load-more"') :]
+
+    # The next window must continue the same filtered view, not the whole catalog: the sentinel's
+    # URL carries the active filter alongside the bumped page, so load-more stays in the filter.
+    assert "search=Tetra" in sentinel
+    assert "page=2" in sentinel
+
+
+def test_a_load_more_request_returns_only_the_next_window_not_the_grid_shell(tmp_path):
+    resp = _windowed_client(tmp_path, count=5, page_size=2).get(
+        "/", params={"page": 2}, headers={"HX-Request": "true"}
+    )
+    html = resp.text
+
+    # A load-more swaps the spent sentinel for the next window's cards, so the fragment is the cards
+    # alone — no <ul> shell to nest, no page chrome — plus a fresh sentinel pointing one page on.
+    assert html.count('class="card"') == 2
+    assert "catalog-grid" not in html
+    assert "<!doctype" not in html.lower()
+    assert "page=3" in html[html.index('class="load-more"') :]
+
+
+def test_a_page_url_is_a_reloadable_full_page_for_no_javascript(tmp_path):
+    html = _windowed_client(tmp_path, count=5, page_size=2).get("/", params={"page": 2}).text
+
+    # With JS off the sentinel is a plain link to ?page=N, so that URL must render a whole, working
+    # page on its own — the document shell and filter form, showing the *second* window of cards.
+    assert "<!doctype" in html.lower()
+    assert 'class="filters"' in html
+    assert 'data-sku="110002"' in html and 'data-sku="110003"' in html
+    assert 'data-sku="110000"' not in html
+
+
+def test_the_sentinel_loads_on_scroll_and_degrades_to_a_plain_link():
+    html = render_grid(_cards([ORNATE_M]), has_more=True, next_url="/?page=2")
+    sentinel = html[html.index('class="load-more"') :]
+
+    # The sentinel fetches the next window when it nears the viewport (infinite scroll) and replaces
+    # itself with that window in place. It carries a real link to the same URL, so with JS off the
+    # rest of the catalog is one plain click away rather than hidden.
+    assert 'hx-trigger="revealed"' in sentinel
+    assert 'hx-swap="outerHTML"' in sentinel
+    assert '<a href="/?page=2">' in sentinel
+    # It does not push ?page into the address bar: infinite scroll accumulates, so the canonical URL
+    # stays the filter view and a reload restarts cleanly at the first window.
+    assert "hx-push-url" not in sentinel

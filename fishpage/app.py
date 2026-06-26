@@ -3,7 +3,7 @@
 import sqlite3
 from pathlib import Path
 
-from fastapi import FastAPI, Form, Header, Query, UploadFile
+from fastapi import FastAPI, Form, Header, Query, Request, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 
@@ -14,7 +14,7 @@ from fishpage.catalog import build_cards, filter_cards_by_classifiers
 from fishpage.images import ImageDecodeError, ImageStore, store_image
 from fishpage.ingest import ingest_pending, stocklist_date
 from fishpage.models import Item, Provenance
-from fishpage.render import render_catalog, render_grid, render_upload
+from fishpage.render import render_cards, render_catalog, render_grid, render_upload
 from fishpage.store import (
     all_classifier_overrides,
     all_enrichments,
@@ -55,6 +55,7 @@ def create_app(
     processed_dir: Path | None = None,
     image_store: ImageStore | None = None,
     image_max_dimension: int = 1024,
+    page_size: int = 60,
 ) -> FastAPI:
     app = FastAPI(title="Fishpage")
     observability.instrument_fastapi(app)
@@ -223,12 +224,14 @@ def create_app(
 
     @app.get("/", response_class=HTMLResponse)
     def index(
+        request: Request,
         include_out_of_stock: bool = False,
         category: str | None = None,
         size: str | None = None,
         on_special: bool = False,
         search: str = "",
         sort: str = "",
+        page: int = 1,
         difficulty: list[str] = Query(default=[]),
         temperament: list[str] = Query(default=[]),
         plant_safe: list[str] = Query(default=[]),
@@ -255,15 +258,38 @@ def create_app(
             "plant_safe": set(plant_safe),
         }
         cards = _filtered_cards(items, selected_classifiers)
-        # One route, header-sniffed: an HTMX filter change swaps just the grid fragment in place,
-        # while a hard navigation to the same URL renders the whole page. The pushed URL and the
-        # reloadable URL are identical because both go through here.
+        # Window the filtered cards so even the full ~900-Item set (include out-of-stock on) renders
+        # one bounded page of DOM, not all of it. The trailing sentinel points at the next page with
+        # the active filters preserved, so a load-more continues the same filtered view.
+        page = max(page, 1)
+        start = (page - 1) * page_size
+        window = cards[start : start + page_size]
+        has_more = start + page_size < len(cards)
+        next_link = request.url.include_query_params(page=page + 1)
+        next_url = next_link.path + ("?" + next_link.query if next_link.query else "")
+        # One route, header-sniffed: an HTMX filter change swaps the whole grid in place (a fresh
+        # first page), an HTMX load-more appends just the next page's cards, and a hard navigation
+        # to the same URL renders the whole page. The pushed URL and the reloadable URL are
+        # identical because both go through here.
         images_enabled = image_store is not None
+        if hx_request and page > 1:
+            return HTMLResponse(
+                render_cards(
+                    window, images_enabled=images_enabled, has_more=has_more, next_url=next_url
+                )
+            )
         if hx_request:
-            return HTMLResponse(render_grid(cards, images_enabled=images_enabled))
+            return HTMLResponse(
+                render_grid(
+                    window, images_enabled=images_enabled, has_more=has_more, next_url=next_url
+                )
+            )
         return HTMLResponse(
             render_catalog(
-                cards,
+                window,
+                total=len(cards),
+                has_more=has_more,
+                next_url=next_url,
                 include_out_of_stock=include_out_of_stock,
                 categories=categories,
                 selected_category=category,
