@@ -157,6 +157,33 @@ bootstrap: _bootstrap-preflight
     flyctl deploy -a {{app}}
     @just bootstrap-verify
 
+# Reverse bootstrap: destroy all the cloud infra so a dead experiment is one command, not a 20-minute
+# manual cleanup. Order is the inverse of bootstrap. `tofu destroy` removes everything declarative —
+# both R2 buckets (Litestream replica + images) and their tokens, the Cloudflare Tunnel/DNS/Access
+# app, the Grafana OTLP token + alert + dashboard, and the GitHub Actions secret — while state is
+# still intact to plan the destroy against. Then `flyctl apps destroy` removes the Machine. The
+# hand-created R2 state bucket (`fishpage-tfstate`) is NOT touched: it holds the very state `tofu
+# destroy` reads, so destroying it first would orphan every resource. Drop it by hand once everything
+# above is gone (see the final echo). Re-runnable: a destroy of already-gone infra is a clean no-op,
+# and `flyctl apps destroy` is skipped when the app is already absent.
+#
+# Guarded so a stray `just teardown` cannot nuke prod: set CONFIRM to the app name to proceed.
+#   just teardown CONFIRM=fishpage
+[group('bootstrap')]
+teardown CONFIRM="": _bootstrap-preflight
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [[ "{{CONFIRM}}" != "{{app}}" ]]; then
+        echo "refusing to tear down: re-run with CONFIRM={{app}} to confirm destroying all {{app}} cloud infra." >&2
+        exit 1
+    fi
+    # Destroy the declarative cloud infra (R2 buckets + tokens, Cloudflare edge, Grafana, GitHub secret).
+    tofu -chdir=infra init -input=false -backend-config=backend.hcl
+    tofu -chdir=infra destroy -auto-approve
+    # Destroy the Fly app and its Machine, if it still exists.
+    flyctl status -a {{app}} >/dev/null 2>&1 && flyctl apps destroy {{app}} --yes || echo "fly app {{app}}: already gone"
+    echo "Cloud infra destroyed. The R2 state bucket fishpage-tfstate still holds the (now empty) state — drop it by hand when you no longer need it: wrangler r2 bucket delete fishpage-tfstate"
+
 # Dry-run the declarative half: prove a re-apply is a clean no-op without changing anything.
 [group('bootstrap')]
 bootstrap-plan: _bootstrap-preflight
