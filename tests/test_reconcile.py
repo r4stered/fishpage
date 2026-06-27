@@ -156,3 +156,32 @@ def test_prior_snapshots_reads_the_row_before_the_current_stocklist(tmp_path):
 
     # A SKU first seen in the earliest Stocklist has no earlier row and is simply absent.
     assert prior_snapshots(conn, JUN19) == {}
+
+
+def test_a_sku_dropped_from_the_stocklist_records_a_zero_snapshot(tmp_path):
+    # The production out-of-stock path: a SKU vanishes from the Stocklist entirely — it is not
+    # listed at qty 0, it is simply gone. The absentee sweep zeroes its items row; reconcile must
+    # also write a qty-0 history row, or a later return reads its last in-stock row as the prior
+    # snapshot and back-in-stock never fires.
+    conn = open_store(tmp_path / "fishpage.db")
+    reconcile(conn, [ORNATE_M, LEAF], JUN19)  # both present
+    reconcile(conn, [LEAF], JUN26)  # ORNATE dropped from the list, not listed at 0
+
+    assert ("110042", "2026-06-26", "28.99", None, 0) in _history(conn)
+
+    reconcile(conn, [ORNATE_M], JUL03)  # back in stock
+    assert prior_snapshots(conn, JUL03)["110042"] == PriorSnapshot(Decimal("28.99"), None, 0)
+
+
+def test_a_sku_absent_for_several_weeks_records_one_zero_snapshot(tmp_path):
+    # Only the absence transition (qty_avail > 0 → 0) is snapshotted, so a long-absent SKU does
+    # not accrue a fresh zero row every Stocklist.
+    conn = open_store(tmp_path / "fishpage.db")
+    reconcile(conn, [ORNATE_M, LEAF], JUN19)
+    reconcile(conn, [LEAF], JUN26)  # ORNATE goes absent
+    reconcile(conn, [LEAF], JUL03)  # ORNATE still absent
+
+    assert [row for row in _history(conn) if row[0] == "110042"] == [
+        ("110042", "2026-06-19", "28.99", None, 15),
+        ("110042", "2026-06-26", "28.99", None, 0),
+    ]

@@ -90,6 +90,21 @@ def reconcile(conn: sqlite3.Connection, items: list[Item], stocklist_date: date)
         "reuse_flagged = MAX(items.reuse_flagged, excluded.reuse_flagged)",
         params,
     )
+    # Snapshot the SKUs going absent this run — carried in a prior Stocklist with stock
+    # (qty_avail > 0) but missing from this one — as a qty-0 history row with their last-known
+    # prices, recorded before the sweep below zeroes them. Absence is how an Item goes out of
+    # stock (it drops off the Stocklist; it is not listed at qty 0), so without this row a
+    # returning SKU's prior snapshot would be its last in-stock row and "back in stock" (prior
+    # qty 0, now > 0) could never fire for the real absent-then-returned path. The qty_avail > 0
+    # filter writes one zero row per absence transition, not one per already-absent SKU every
+    # run, so the ledger does not accrue a zero row per discontinued SKU per week.
+    conn.execute(
+        "INSERT OR IGNORE INTO stocklist_history "
+        "(sku, stocklist_date, retail_price, special_price, qty) "
+        "SELECT sku, :date, retail_price, special_price, 0 FROM items "
+        "WHERE last_seen IS NOT :date AND qty_avail > 0",
+        {"date": stocklist_date.isoformat()},
+    )
     # An absentee is exactly a row the upsert above did NOT just stamp with this run's
     # date, so "absent" is "last_seen is not stocklist_date" — one bound parameter rather
     # than one per present SKU, which keeps us clear of SQLITE_MAX_VARIABLE_NUMBER (999 on
