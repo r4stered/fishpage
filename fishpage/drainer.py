@@ -19,7 +19,7 @@ from fishpage.enricher import Enricher, EnrichmentResult
 from fishpage.images import ImageStore, store_image
 from fishpage.imagesource import ImageSource
 from fishpage.models import Provenance
-from fishpage.store import image_for, persist_enrichment, unenriched_items
+from fishpage.store import image_for, images_pending, persist_enrichment, unenriched_items
 
 _log = logging.getLogger(__name__)
 
@@ -98,6 +98,46 @@ def drain_pending(
         return DrainResult(drained=drained, failed=failed)
 
 
+def backfill_images(
+    conn: sqlite3.Connection,
+    image_store: ImageStore,
+    image_source: ImageSource,
+    *,
+    rate: float = 0.0,
+    sleep: Callable[[float], None] = time.sleep,
+    max_dimension: int = 1024,
+) -> int:
+    """Fetch a sourced image for every already-enriched Item that still has none; return the count.
+
+    The image counterpart to a drain pass, for the catalog enriched *before* an image source
+    existed: enrichment already resolved the species, so this needs no enricher and no LLM call. It
+    walks :func:`~fishpage.store.images_pending` — the resolved, non-strain, image-less Items — and
+    routes each through the same gate a fresh enrichment uses, so the two paths can never diverge.
+    A miss or an error leaves that Item on the manual path and never aborts the rest. ``rate`` paces
+    the calls the same way the drain pass does, sparing the free APIs across the whole catalog.
+
+    Idempotent and resumable: an Item drops out of the queue the moment it has an image, so a re-run
+    only retries the still-imageless remainder. The honest no-image tail (a resolved species with no
+    commercial-free photo) writes nothing and is simply re-tried on the next run.
+    """
+    pending = images_pending(conn)
+    if not pending:
+        return 0
+    _log.info(
+        "Backfilling images for %d enriched Item(s)", len(pending), extra={"pending": len(pending)}
+    )
+    landed = 0
+    for sku, result in pending:
+        _acquire_auto_image(
+            conn, image_store, image_source, sku, result, max_dimension=max_dimension
+        )
+        if image_for(conn, sku) is not None:
+            landed += 1
+        if rate:
+            sleep(rate)
+    return landed
+
+
 def _acquire_auto_image(
     conn: sqlite3.Connection,
     image_store: ImageStore,
@@ -170,7 +210,21 @@ def run_drainer(
     requirement behind filling Classifiers, and a poll loop survives a crash by simply re-reading
     the surviving queue on the next tick. When an image store and source are wired, each pass also
     fills a resolved, non-strain Item's lead image; without them it fills Classifiers only.
+
+    A one-shot image backfill runs first, before the poll loop, so a catalog already enriched before
+    the image source existed collects images for its resolved, non-strain Items without waiting on a
+    new SKU. The honest no-image tail simply writes nothing and is re-tried on the next process
+    start; new SKUs get their image inline via the drain pass, so the backfill need not repeat.
     """
+    if image_store is not None and image_source is not None:
+        backfill_images(
+            conn,
+            image_store,
+            image_source,
+            rate=rate,
+            sleep=sleep,
+            max_dimension=max_dimension,
+        )
     while True:
         _drain_pass(
             conn,

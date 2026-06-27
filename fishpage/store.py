@@ -296,6 +296,26 @@ def enrichment_for(conn: sqlite3.Connection, sku: str) -> EnrichmentResult | Non
     return None if row is None else _row_to_enrichment(row)
 
 
+def images_pending(conn: sqlite3.Connection) -> list[tuple[str, EnrichmentResult]]:
+    """The auto-image backfill queue: enriched Items with a storable species but no image yet.
+
+    A SKU qualifies when it has an ``enrichment`` row whose species resolved (non-null) and is not
+    strain-specific, and it has no ``image`` row of any kind. That is exactly the set the sourced-
+    image gate would store for — the resolved, non-strain Items — minus the ones that already carry
+    an image (manual or sourced), so the queue holds only the fetchable remainder and empties as
+    images land. A SKU that already has an image, a strain, the unresolved tail, and an un-enriched
+    Item are all absent. The resolved species rides back with each row so the backfill keys the
+    source off it without a second read. This is the image counterpart to :func:`unenriched_items`,
+    and like it costs no LLM call — the species was resolved when the row was first written.
+    """
+    rows = conn.execute(
+        f"SELECT e.sku, {_ENRICHMENT_COLUMNS} "
+        "FROM enrichment e LEFT JOIN image i ON i.sku = e.sku "
+        "WHERE i.sku IS NULL AND e.scientific_name IS NOT NULL AND e.strain_specific = 0"
+    ).fetchall()
+    return [(row["sku"], _row_to_enrichment(row)) for row in rows]
+
+
 def all_enrichments(conn: sqlite3.Connection) -> dict[str, EnrichmentResult]:
     """Every persisted AI row keyed by SKU — the grid resolves all visible cards' Classifiers from
     one read. An un-enriched SKU is simply absent from the mapping."""

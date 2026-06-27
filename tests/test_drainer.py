@@ -16,7 +16,7 @@ from PIL import Image
 
 import fishpage.drainer as drainer
 from fishpage.config import load_settings
-from fishpage.drainer import drain_pending, run_drainer
+from fishpage.drainer import backfill_images, drain_pending, run_drainer
 from fishpage.enricher import Difficulty, EnrichmentResult, PlantSafe, Temperament
 from fishpage.images import StoredImage
 from fishpage.imagesource import SourcedImage
@@ -27,6 +27,7 @@ from fishpage.store import (
     enrichment_for,
     image_for,
     open_store,
+    persist_enrichment,
     reconcile,
     unenriched_items,
 )
@@ -155,6 +156,34 @@ def test_run_drainer_drains_a_pass_then_sleeps_the_interval(tmp_path):
 
     assert unenriched_items(conn) == []
     assert pauses == [30.0]
+
+
+def test_run_drainer_backfills_existing_images_once_before_polling(tmp_path):
+    conn = open_store(tmp_path / "fishpage.db")
+    reconcile(conn, [ORNATE_M], JUN19)
+    # Already enriched but never imaged — the prod state where the queue is otherwise empty.
+    persist_enrichment(conn, "110042", RESOLVED)
+    store = FakeImageStore()
+    source = FakeImageSource(_sourced())
+
+    def stop_after_first(seconds: float) -> None:
+        raise _Stop
+
+    with pytest.raises(_Stop):
+        run_drainer(
+            conn,
+            RecordingEnricher(),
+            interval=30.0,
+            rate=0.0,
+            sleep=stop_after_first,
+            image_store=store,
+            image_source=source,
+        )
+
+    # The drainer backfills the already-enriched catalog's images at startup — before the first poll
+    # sleep breaks the loop — so a queue that is empty of *un-enriched* Items still collects images.
+    record = image_for(conn, "110042")
+    assert record is not None and record.provenance is Provenance.WIKIMEDIA
 
 
 def test_run_drainer_survives_a_failed_pass_and_keeps_polling(tmp_path, monkeypatch):
@@ -498,6 +527,82 @@ def test_drain_without_an_image_source_only_fills_classifiers(tmp_path):
 
     assert enrichment_for(conn, "110042") is not None
     assert image_for(conn, "110042") is None
+
+
+RESOLVED = EnrichmentResult(
+    scientific_name="Polypterus ornatipinnis",
+    common_name="Ornate Bichir",
+    difficulty=Difficulty.INTERMEDIATE,
+    temperament=Temperament.SEMI_AGGRESSIVE,
+    plant_safe=PlantSafe.SAFE,
+    strain_specific=False,
+)
+
+
+def test_backfill_images_stores_an_image_for_each_pending_enriched_item(tmp_path):
+    conn = open_store(tmp_path / "fishpage.db")
+    reconcile(conn, [ORNATE_M, LEAF], JUN19)
+    # Two Items already enriched to a storable species but never imaged — the prod backfill case
+    # after enrichment ran before the image source existed.
+    persist_enrichment(conn, "110042", RESOLVED)
+    persist_enrichment(conn, "110092", RESOLVED)
+    store = FakeImageStore()
+    source = FakeImageSource(_sourced())
+
+    landed = backfill_images(conn, store, source)
+
+    # The backfill keys the source off each Item's stored species and stores a wikimedia image — no
+    # enricher and no LLM call in sight, so an already-enriched catalog gets images for free.
+    assert source.species == ["Polypterus ornatipinnis", "Polypterus ornatipinnis"]
+    first = image_for(conn, "110042")
+    second = image_for(conn, "110092")
+    assert first is not None and first.provenance is Provenance.WIKIMEDIA
+    assert second is not None and second.provenance is Provenance.WIKIMEDIA
+    assert landed == 2
+
+
+def test_backfill_images_is_a_noop_on_an_empty_queue(tmp_path):
+    conn = open_store(tmp_path / "fishpage.db")
+    reconcile(conn, [ORNATE_M], JUN19)  # un-enriched: not in the image backfill queue
+    source = FakeImageSource(_sourced())
+
+    landed = backfill_images(conn, FakeImageStore(), source)
+
+    # Nothing enriched-but-imageless means nothing to fetch — the source is never queried.
+    assert source.species == []
+    assert landed == 0
+
+
+def test_backfill_images_paces_calls_with_the_injected_sleeper(tmp_path):
+    conn = open_store(tmp_path / "fishpage.db")
+    reconcile(conn, [ORNATE_M, LEAF], JUN19)
+    persist_enrichment(conn, "110042", RESOLVED)
+    persist_enrichment(conn, "110092", RESOLVED)
+    pauses: list[float] = []
+
+    backfill_images(
+        conn, FakeImageStore(), FakeImageSource(_sourced()), rate=0.5, sleep=pauses.append
+    )
+
+    # Each fetch is several Wikimedia round-trips, so the backfill rate-limits itself between Items
+    # rather than firing ~900 fetches at the API at once.
+    assert pauses == [0.5, 0.5]
+
+
+def test_backfill_images_skips_an_item_that_already_has_an_image(tmp_path):
+    conn = open_store(tmp_path / "fishpage.db")
+    reconcile(conn, [ORNATE_M], JUN19)
+    persist_enrichment(conn, "110042", RESOLVED)
+    attach_image(conn, "110042", object_key="110042", provenance=Provenance.MANUAL)
+    source = FakeImageSource(_sourced())
+
+    backfill_images(conn, FakeImageStore(), source)
+
+    # An Item with an image — here a manual upload — is not in the queue, so the backfill never
+    # touches it and the human's image stands.
+    assert source.species == []
+    record = image_for(conn, "110042")
+    assert record is not None and record.provenance is Provenance.MANUAL
 
 
 def test_an_auto_image_failure_does_not_fail_the_enrichment(tmp_path):
