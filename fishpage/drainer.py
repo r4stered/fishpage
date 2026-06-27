@@ -16,7 +16,10 @@ from dataclasses import dataclass
 
 from fishpage import observability
 from fishpage.enricher import Enricher, EnrichmentResult
-from fishpage.store import persist_enrichment, unenriched_items
+from fishpage.images import ImageStore, store_image
+from fishpage.imagesource import ImageSource
+from fishpage.models import Provenance
+from fishpage.store import image_for, persist_enrichment, unenriched_items
 
 _log = logging.getLogger(__name__)
 
@@ -35,6 +38,9 @@ def drain_pending(
     *,
     rate: float = 0.0,
     sleep: Callable[[float], None] = time.sleep,
+    image_store: ImageStore | None = None,
+    image_source: ImageSource | None = None,
+    max_dimension: int = 1024,
 ) -> DrainResult:
     """Enrich and persist every Item in the un-enriched queue in one paced pass; return the roll-up.
 
@@ -70,6 +76,10 @@ def drain_pending(
             observability.record_enrichment_call(outcome="ok", model=enricher.model)
             _record_quality(result)
             persist_enrichment(conn, item.sku, result)
+            if image_store is not None and image_source is not None:
+                _acquire_auto_image(
+                    conn, image_store, image_source, item.sku, result, max_dimension=max_dimension
+                )
             drained.append(item.sku)
             _log.info(
                 "Enriched SKU %s",
@@ -86,6 +96,47 @@ def drain_pending(
             if rate:
                 sleep(rate)
         return DrainResult(drained=drained, failed=failed)
+
+
+def _acquire_auto_image(
+    conn: sqlite3.Connection,
+    image_store: ImageStore,
+    image_source: ImageSource,
+    sku: str,
+    result: EnrichmentResult,
+    *,
+    max_dimension: int,
+) -> None:
+    """Fetch and store a sourced lead image for one just-enriched Item, store-confident-only.
+
+    The gate is the spike's: an image is acquired only when the species resolved (non-``None``)
+    and the Item is not a strain — a strain's wild-type photo would be the wrong fish — and never
+    over an existing ``manual`` image, which is authoritative and un-clobberable. The whole step is
+    best-effort: a source that finds nothing storable or one that raises leaves the Item imageless
+    on the manual path, and never fails the enrichment that already persisted.
+    """
+    if result.scientific_name is None or result.strain_specific:
+        return
+    existing = image_for(conn, sku)
+    if existing is not None and existing.provenance is Provenance.MANUAL:
+        return
+    try:
+        sourced = image_source.fetch(result.scientific_name)
+        if sourced is None:
+            return
+        store_image(
+            image_store,
+            conn,
+            sku,
+            sourced.data,
+            provenance=Provenance.WIKIMEDIA,
+            license=sourced.license,
+            attribution=sourced.attribution,
+            source_url=sourced.source_url,
+            max_dimension=max_dimension,
+        )
+    except Exception:
+        _log.exception("Auto-image failed for SKU %s; leaving it on the manual path", sku)
 
 
 def _record_quality(result: EnrichmentResult) -> None:
@@ -109,15 +160,27 @@ def run_drainer(
     interval: float = 30.0,
     rate: float = 1.0,
     sleep: Callable[[float], None] = time.sleep,
+    image_store: ImageStore | None = None,
+    image_source: ImageSource | None = None,
+    max_dimension: int = 1024,
 ) -> None:
     """Poll the un-enriched queue forever, draining each pass — the drainer's thin trigger.
 
     Polling rather than an event is deliberate, the same call ingestion makes: there is no latency
     requirement behind filling Classifiers, and a poll loop survives a crash by simply re-reading
-    the surviving queue on the next tick.
+    the surviving queue on the next tick. When an image store and source are wired, each pass also
+    fills a resolved, non-strain Item's lead image; without them it fills Classifiers only.
     """
     while True:
-        _drain_pass(conn, enricher, rate=rate, sleep=sleep)
+        _drain_pass(
+            conn,
+            enricher,
+            rate=rate,
+            sleep=sleep,
+            image_store=image_store,
+            image_source=image_source,
+            max_dimension=max_dimension,
+        )
         sleep(interval)
 
 
@@ -128,11 +191,22 @@ def _drain_pass(
     rate: float,
     sleep: Callable[[float], None],
     monotonic: Callable[[], float] = time.monotonic,
+    image_store: ImageStore | None = None,
+    image_source: ImageSource | None = None,
+    max_dimension: int = 1024,
 ) -> None:
     """One drainer iteration, surviving any failure to the next poll so the loop never dies."""
     try:
         started = monotonic()
-        result = drain_pending(conn, enricher, rate=rate, sleep=sleep)
+        result = drain_pending(
+            conn,
+            enricher,
+            rate=rate,
+            sleep=sleep,
+            image_store=image_store,
+            image_source=image_source,
+            max_dimension=max_dimension,
+        )
         duration = monotonic() - started
         if result.drained or result.failed:
             _log.info(

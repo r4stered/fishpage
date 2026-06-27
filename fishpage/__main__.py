@@ -24,7 +24,8 @@ from fishpage.boot import seed_if_empty
 from fishpage.config import Settings, load_settings
 from fishpage.drainer import run_drainer
 from fishpage.enricher import Enricher, select_enricher
-from fishpage.images import select_image_store
+from fishpage.images import ImageStore, select_image_store
+from fishpage.imagesource import ImageSource, select_image_source
 from fishpage.ingest import watch_incoming
 from fishpage.store import open_store
 
@@ -55,12 +56,16 @@ def build_app(settings: Settings):
             settings.poll_interval,
         )
 
-    if start_drainer(conn, settings) is not None:
-        _log.info("Enrichment drainer running — filling un-enriched Items in the background")
-
     image_store = select_image_store(settings)
+    image_source = select_image_source(settings)
     if image_store is not None:
         _log.info("Image bucket configured — manual uploads stored in R2 and proxied by the app")
+
+    drainer = start_drainer(conn, settings, image_store=image_store, image_source=image_source)
+    if drainer is not None:
+        _log.info("Enrichment drainer running — filling un-enriched Items in the background")
+        if image_store is not None and image_source is not None:
+            _log.info("Auto-image on — resolved, non-strain Items get a Wikimedia lead image")
 
     return create_app(
         conn,
@@ -75,23 +80,44 @@ def start_drainer(
     conn: sqlite3.Connection,
     settings: Settings,
     *,
-    spawn: Callable[[sqlite3.Connection, Enricher], object] | None = None,
+    image_store: ImageStore | None = None,
+    image_source: ImageSource | None = None,
+    spawn: Callable[..., object] | None = None,
 ) -> object | None:
     """Start the background enrichment drainer when Enrichment is configured; otherwise do nothing.
 
     Opt-in and default-off: with no flag or no key :func:`select_enricher` returns ``None``, so no
     drainer thread is started — ``just run`` and the test suite start no background enrichment and
-    need no credential. ``spawn`` is injected so a test can assert the wiring decision without
-    launching a real thread; in production it defaults to a daemon thread running the drain loop.
+    need no credential. When an image store and source are wired the drainer also fills a
+    resolved, non-strain Item's lead image; absent either it fills Classifiers only. ``spawn`` is
+    injected so a test can assert the wiring decision without launching a real thread; in
+    production it defaults to a daemon thread running the drain loop.
     """
     enricher = select_enricher(settings)
     if enricher is None:
         return None
-    return (spawn or _spawn_drainer)(conn, enricher)
+    return (spawn or _spawn_drainer)(
+        conn, enricher, image_store, image_source, settings.image_max_dimension
+    )
 
 
-def _spawn_drainer(conn: sqlite3.Connection, enricher: Enricher) -> threading.Thread:
-    thread = threading.Thread(target=run_drainer, args=(conn, enricher), daemon=True)
+def _spawn_drainer(
+    conn: sqlite3.Connection,
+    enricher: Enricher,
+    image_store: ImageStore | None,
+    image_source: ImageSource | None,
+    max_dimension: int,
+) -> threading.Thread:
+    thread = threading.Thread(
+        target=run_drainer,
+        args=(conn, enricher),
+        kwargs={
+            "image_store": image_store,
+            "image_source": image_source,
+            "max_dimension": max_dimension,
+        },
+        daemon=True,
+    )
     thread.start()
     return thread
 

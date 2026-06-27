@@ -12,14 +12,24 @@ from datetime import date
 from decimal import Decimal
 
 import pytest
+from PIL import Image
 
 import fishpage.drainer as drainer
 from fishpage.config import load_settings
 from fishpage.drainer import drain_pending, run_drainer
 from fishpage.enricher import Difficulty, EnrichmentResult, PlantSafe, Temperament
-from fishpage.models import Item
+from fishpage.images import StoredImage
+from fishpage.imagesource import SourcedImage
+from fishpage.models import Item, Provenance
 from fishpage.observability import configure_logging
-from fishpage.store import enrichment_for, open_store, reconcile, unenriched_items
+from fishpage.store import (
+    attach_image,
+    enrichment_for,
+    image_for,
+    open_store,
+    reconcile,
+    unenriched_items,
+)
 
 
 class _Stop(Exception):
@@ -333,3 +343,177 @@ def test_confident_classifiers_do_not_touch_the_unknown_counter(tmp_path, teleme
     drain_pending(conn, ResolvedEnricher())
 
     assert "fishpage.enrichment.classifier_unknown" not in telemetry.metric_names()
+
+
+def _real_jpeg() -> bytes:
+    """A genuine JPEG the store_image optimization seam can decode — a sourced image is real."""
+    buf = io.BytesIO()
+    Image.new("RGB", (32, 24), (40, 160, 90)).save(buf, format="JPEG")
+    return buf.getvalue()
+
+
+SOURCED_JPEG = _real_jpeg()
+
+
+class StrainEnricher:
+    """Resolves a confident species but flags it strain-specific — the wild-type photo is wrong."""
+
+    model = "fake-model"
+
+    def enrich(self, trade_name: str, *, category: str, size: str) -> EnrichmentResult:
+        return EnrichmentResult(
+            scientific_name="Pterophyllum scalare",
+            common_name="Gold Marble Angel",
+            difficulty=Difficulty.INTERMEDIATE,
+            temperament=Temperament.SEMI_AGGRESSIVE,
+            plant_safe=PlantSafe.SAFE,
+            strain_specific=True,
+        )
+
+
+class FakeImageStore:
+    """An in-memory ImageStore — the bucket the drainer puts a sourced image into, no network."""
+
+    def __init__(self):
+        self.objects: dict[str, StoredImage] = {}
+
+    def put(self, key: str, data: bytes, *, content_type: str) -> None:
+        self.objects[key] = StoredImage(data=data, content_type=content_type)
+
+    def get(self, key: str) -> StoredImage | None:
+        return self.objects.get(key)
+
+
+class FakeImageSource:
+    """An injectable ImageSource that records the species it was asked for and returns a canned
+    result — a sourced image, or ``None`` for the honest gap. The suite never hits Wikimedia."""
+
+    def __init__(self, result: SourcedImage | None):
+        self._result = result
+        self.species: list[str] = []
+
+    def fetch(self, species: str) -> SourcedImage | None:
+        self.species.append(species)
+        return self._result
+
+
+def _sourced() -> SourcedImage:
+    return SourcedImage(
+        data=SOURCED_JPEG,
+        license="CC BY-SA 4.0",
+        attribution="A. Photographer",
+        source_url="https://commons.wikimedia.org/wiki/File:Fish.jpg",
+    )
+
+
+def test_drain_stores_a_wikimedia_image_for_a_resolved_wild_type(tmp_path):
+    conn = open_store(tmp_path / "fishpage.db")
+    reconcile(conn, [ORNATE_M], JUN19)
+    store = FakeImageStore()
+    source = FakeImageSource(_sourced())
+
+    drain_pending(conn, ResolvedEnricher(), image_store=store, image_source=source)
+
+    # A resolved, non-strain species is the store-confident case: the drainer keys the source off
+    # the resolved species and stores the result with wikimedia Provenance plus its licence,
+    # attribution, and source URL — the bytes in the bucket, only the metadata in the DB.
+    assert source.species == ["Polypterus ornatipinnis"]
+    record = image_for(conn, "110042")
+    assert record is not None
+    assert record.provenance is Provenance.WIKIMEDIA
+    assert record.license == "CC BY-SA 4.0"
+    assert record.attribution == "A. Photographer"
+    assert record.source_url == "https://commons.wikimedia.org/wiki/File:Fish.jpg"
+    assert Image.open(io.BytesIO(store.objects["110042"].data)).format == "WEBP"
+
+
+def test_drain_skips_the_auto_image_for_a_strain(tmp_path):
+    conn = open_store(tmp_path / "fishpage.db")
+    reconcile(conn, [ORNATE_M], JUN19)
+    store = FakeImageStore()
+    source = FakeImageSource(_sourced())
+
+    drain_pending(conn, StrainEnricher(), image_store=store, image_source=source)
+
+    # A strain resolves to a real species with confidence, but its wild-type photo is the wrong
+    # fish — so the gate never even queries the source, and no image is stored.
+    assert source.species == []
+    assert image_for(conn, "110042") is None
+    assert store.objects == {}
+
+
+def test_drain_skips_the_auto_image_for_an_unresolved_species(tmp_path):
+    conn = open_store(tmp_path / "fishpage.db")
+    reconcile(conn, [ORNATE_M], JUN19)
+    store = FakeImageStore()
+    source = FakeImageSource(_sourced())
+
+    drain_pending(conn, GappyEnricher(), image_store=store, image_source=source)
+
+    # No species resolved — the honest gap. No query, no image; the Item stays on the manual path.
+    assert source.species == []
+    assert image_for(conn, "110042") is None
+
+
+def test_drain_never_clobbers_a_manual_image(tmp_path):
+    conn = open_store(tmp_path / "fishpage.db")
+    reconcile(conn, [ORNATE_M], JUN19)
+    # A human already uploaded an image for this Item before it was enriched.
+    attach_image(conn, "110042", object_key="110042", provenance=Provenance.MANUAL)
+    store = FakeImageStore()
+    source = FakeImageSource(_sourced())
+
+    drain_pending(conn, ResolvedEnricher(), image_store=store, image_source=source)
+
+    # A manual image is authoritative and un-clobberable: even a resolved wild-type does not
+    # overwrite it, and the source is never queried for a SKU that already has the human's image.
+    assert source.species == []
+    record = image_for(conn, "110042")
+    assert record is not None and record.provenance is Provenance.MANUAL
+    assert record.object_key == "110042"
+
+
+def test_drain_leaves_no_image_when_the_source_finds_none(tmp_path):
+    conn = open_store(tmp_path / "fishpage.db")
+    reconcile(conn, [ORNATE_M], JUN19)
+    store = FakeImageStore()
+    source = FakeImageSource(None)  # no usable, commercial-free image for this species
+
+    result = drain_pending(conn, ResolvedEnricher(), image_store=store, image_source=source)
+
+    # The source found nothing storable; the Item is still enriched and counted as drained — the
+    # missing image is an accepted outcome, not a failure.
+    assert source.species == ["Polypterus ornatipinnis"]
+    assert image_for(conn, "110042") is None
+    assert result.drained == ["110042"]
+
+
+def test_drain_without_an_image_source_only_fills_classifiers(tmp_path):
+    conn = open_store(tmp_path / "fishpage.db")
+    reconcile(conn, [ORNATE_M], JUN19)
+
+    # The auto-image path is opt-in: with no store/source wired (the default), the drainer fills
+    # Classifiers exactly as before and attaches no image.
+    drain_pending(conn, ResolvedEnricher())
+
+    assert enrichment_for(conn, "110042") is not None
+    assert image_for(conn, "110042") is None
+
+
+def test_an_auto_image_failure_does_not_fail_the_enrichment(tmp_path):
+    conn = open_store(tmp_path / "fishpage.db")
+    reconcile(conn, [ORNATE_M], JUN19)
+    store = FakeImageStore()
+
+    class BoomSource:
+        def fetch(self, species: str) -> SourcedImage | None:
+            raise RuntimeError("wikimedia blew up")
+
+    result = drain_pending(conn, ResolvedEnricher(), image_store=store, image_source=BoomSource())
+
+    # A source that raises is best-effort failure: the Classifiers already persisted, the SKU still
+    # counts as drained, and no image lands — the image step never takes the enrichment down.
+    assert result.drained == ["110042"]
+    assert result.failed == 0
+    assert enrichment_for(conn, "110042") is not None
+    assert image_for(conn, "110042") is None
