@@ -18,6 +18,7 @@ from fishpage.images import ImageDecodeError, ImageStore, store_image
 from fishpage.ingest import ingest_pending, stocklist_date
 from fishpage.models import Item, Provenance
 from fishpage.render import (
+    pick_list_export_text,
     render_cards,
     render_catalog,
     render_grid,
@@ -33,6 +34,7 @@ from fishpage.store import (
     all_images,
     all_items,
     clear_enrichment,
+    clear_pick_list,
     image_for,
     item_exists,
     latest_stocklist_date,
@@ -212,6 +214,35 @@ def create_app(
         lines = pick_list_for(conn, actor)
         return lines, sum((line.line_total for line in lines), Decimal("0"))
 
+    @app.post("/pick-list/export")
+    def pick_list_export(
+        access_email: str | None = Header(default=None, alias=ACCESS_EMAIL_HEADER),
+    ) -> Response:
+        # Registered ahead of POST /pick-list/{sku} so the literal "export" path wins over the SKU
+        # capture. Export is the terminal action: hand back the current Actor's list as an
+        # order-ready plain-text download, then clear it so the served list can't bleed into next
+        # week's order. An empty list has nothing to order — keep it, say so, and skip the wipe.
+        actor = actor_from_header(access_email)
+        lines = pick_list_for(conn, actor)
+        if not lines:
+            return JSONResponse(
+                {"detail": "Pick list is empty — nothing to export"}, status_code=400
+            )
+        body = pick_list_export_text(lines)
+        clear_pick_list(conn, actor)
+        # Audit the mutation: the Actor and line count ride as indexed fields, so an export joins
+        # the same actor query as uploads, overrides, and re-enrichments.
+        _log.info(
+            "Pick list exported (%d lines)",
+            len(lines),
+            extra={"actor": actor, "lines": len(lines)},
+        )
+        return Response(
+            content=body,
+            media_type="text/plain; charset=utf-8",
+            headers={"Content-Disposition": 'attachment; filename="pick-list.txt"'},
+        )
+
     @app.post("/pick-list/{sku}", response_class=HTMLResponse)
     def pick_list_add(
         sku: str,
@@ -382,7 +413,12 @@ def create_app(
         if hx_request:
             return HTMLResponse(
                 render_grid(
-                    window, images_enabled=images_enabled, has_more=has_more, next_url=next_url
+                    window,
+                    images_enabled=images_enabled,
+                    has_more=has_more,
+                    next_url=next_url,
+                    total=len(cards),
+                    oob=True,
                 )
             )
         return HTMLResponse(

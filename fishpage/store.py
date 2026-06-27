@@ -485,6 +485,17 @@ def remove_from_pick_list(conn: sqlite3.Connection, actor: str, sku: str) -> Non
     conn.commit()
 
 
+def clear_pick_list(conn: sqlite3.Connection, actor: str) -> None:
+    """Wipe the Actor's whole Pick list. A no-op if the Actor has no lines.
+
+    Export is the terminal action — once the buyer has taken the list to the supplier, the app's
+    copy has served its purpose and is cleared so a stale list cannot bleed into next week's order.
+    Scoped to the one Actor, so clearing one buyer's list never touches another's.
+    """
+    conn.execute("DELETE FROM pick_list WHERE actor = ?", (actor,))
+    conn.commit()
+
+
 def pick_list_for(conn: sqlite3.Connection, actor: str) -> list[PickLine]:
     """The Actor's Pick list, each line carrying its whole Item and the wanted quantity.
 

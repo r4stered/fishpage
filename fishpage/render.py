@@ -20,6 +20,8 @@ def render_grid(
     images_enabled: bool = False,
     has_more: bool = False,
     next_url: str = "",
+    total: int | None = None,
+    oob: bool = False,
 ) -> str:
     """Render the whole ``<ul>`` grid: one window of Item cards plus, when ``has_more``, the
     load-more sentinel. This is the fragment the full catalog page includes and the fragment an
@@ -28,13 +30,20 @@ def render_grid(
     Each :class:`Card` carries its Item, resolved Classifiers, and image record (or ``None``), so a
     card renders correctly un-enriched, enriched, or manually-overridden from one template.
     ``images_enabled`` adds the per-card manual upload form only when an image bucket is configured
-    to receive it. ``next_url`` is where the sentinel points for the next window."""
+    to receive it. ``next_url`` is where the sentinel points for the next window.
+
+    The item count sits outside the grid, so an HTMX filter swap can't reach it by swapping the
+    grid alone. ``oob`` appends an out-of-band ``#item-count`` carrying ``total`` (the size of the
+    filtered set), updating the count in the same response; it stays off on the include path the
+    full page uses, which renders the count itself."""
     return _env.get_template("_grid.html").render(
         cards=cards,
         classifiers=CLASSIFIERS,
         images_enabled=images_enabled,
         has_more=has_more,
         next_url=next_url,
+        total=total,
+        oob=oob,
     )
 
 
@@ -112,6 +121,24 @@ def render_pick_list_fragment(lines: list[PickLine], total: Decimal) -> str:
 def render_pick_list(lines: list[PickLine], total: Decimal) -> str:
     """Render the whole Pick-list page: the chrome plus the same fragment an HTMX mutation swaps."""
     return _env.get_template("pick_list.html").render(lines=lines, total=total)
+
+
+def pick_list_export_text(lines: list[PickLine]) -> str:
+    """Build the order-ready plain-text Pick list the buyer pastes into the supplier's order.
+
+    One tab-separated line per Item — SKU, name, quantity — so it pastes cleanly into a spreadsheet
+    or order form. A line whose Item has dropped to zero availability is kept, never silently
+    dropped, but tagged ``[OUT OF STOCK — last seen <date>]`` so the buyer notices before ordering;
+    the last-seen date lets them tell a this-week stockout from a long-discontinued SKU.
+    """
+    rows = []
+    for line in lines:
+        cells = [line.item.sku, line.item.name, str(line.quantity)]
+        if line.item.qty_avail == 0:
+            seen = "never" if line.item.last_seen is None else line.item.last_seen.isoformat()
+            cells.append(f"[OUT OF STOCK — last seen {seen}]")
+        rows.append("\t".join(cells))
+    return "\n".join(rows)
 
 
 def render_upload(*, message: str = "", error: bool = False) -> str:

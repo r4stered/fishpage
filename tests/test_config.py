@@ -67,6 +67,24 @@ def test_environment_overrides_each_local_value():
     assert settings.port == 9000
 
 
+def test_ingest_sanity_thresholds_default_and_override():
+    defaults = load_settings({})
+    assert defaults.ingest_min_row_fraction == 0.8
+    assert defaults.ingest_max_zeroed_fraction == 0.5
+    assert defaults.ingest_max_retail_price == 100000
+
+    tuned = load_settings(
+        {
+            "INGEST_MIN_ROW_FRACTION": "0.6",
+            "INGEST_MAX_ZEROED_FRACTION": "0.3",
+            "INGEST_MAX_RETAIL_PRICE": "5000",
+        }
+    )
+    assert tuned.ingest_min_row_fraction == 0.6
+    assert tuned.ingest_max_zeroed_fraction == 0.3
+    assert tuned.ingest_max_retail_price == 5000
+
+
 def test_poll_interval_is_floored_so_a_low_override_cannot_busy_loop_the_watcher():
     assert load_settings({"INGEST_POLL_SECONDS": "0"}).poll_interval == 1.0
     assert load_settings({"INGEST_POLL_SECONDS": "-5"}).poll_interval == 1.0

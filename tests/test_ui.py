@@ -197,6 +197,34 @@ def test_htmx_grid_partial_reflects_the_active_filters(tmp_path):
     assert 'data-sku="110042"' not in html
 
 
+def test_htmx_filter_change_updates_the_item_count_out_of_band(tmp_path):
+    conn = open_store(tmp_path / "fishpage.db")
+    leaf = Item("110092", "-", "Leaf Fish", Decimal("5.99"), None, 30)
+    reconcile(conn, [ORNATE_M, leaf], JUN19)
+    client = TestClient(create_app(conn))
+
+    html = client.get("/", params={"search": "leaf"}, headers={"HX-Request": "true"}).text
+
+    # The count lives outside the swapped grid, so the fragment carries an out-of-band #item-count
+    # to refresh it in the same response — and it reads the *filtered* total (one match), not two.
+    assert 'id="item-count"' in html
+    assert 'hx-swap-oob="true"' in html
+    assert "1 Items" in html
+
+
+def test_load_more_request_does_not_emit_the_item_count(tmp_path):
+    html = (
+        _windowed_client(tmp_path, count=5, page_size=2)
+        .get("/", params={"page": 2}, headers={"HX-Request": "true"})
+        .text
+    )
+
+    # A load-more appends cards into the existing grid; the count is already correct from the first
+    # page, so this path must not re-emit an out-of-band #item-count.
+    assert "hx-swap-oob" not in html
+    assert 'id="item-count"' not in html
+
+
 def test_filter_form_is_wired_to_swap_the_grid_and_push_the_url(tmp_path):
     html = _client(tmp_path).get("/").text
     form = html[html.index("<form") : html.index("</form>")]

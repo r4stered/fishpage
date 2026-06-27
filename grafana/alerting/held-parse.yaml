@@ -1,0 +1,62 @@
+# Grafana provisioned alert rule: a Stocklist parse was held back as structurally implausible.
+#
+# Each nightly ingest builds a report (new/returned/zeroed/price-changed/flagged) and, before
+# reconciling, checks the parse against the previous Stocklist's In-stock SKUs. A parse that keeps
+# too few of those rows or would zero too many of them is the shape of a partial or column-shifted
+# extraction: it is left in incoming/ (not reconciled) and increments `fishpage.ingest.held`. This
+# rule pages whenever that counter rises, so a silently-wrong parse held back surfaces instead of a
+# bad catalog reconciling unnoticed. Import by pointing Grafana's alerting provisioning at this
+# directory, or paste it into Grafana Cloud's "Alert rules → New → Import".
+#
+# Metric name: Grafana Cloud ingests OTLP metrics through its Prometheus store, which rewrites the
+# OTel counter `fishpage.ingest.held`'s dots to underscores and appends `_total` (the Prometheus
+# convention for a monotonic counter), so it arrives as `fishpage_ingest_held_total`. The
+# datasourceUid below is `grafanacloud-prom`, the stack's Prometheus datasource.
+#
+# Window: a held parse is rare and important, so any increase over the lookback fires. `increase`
+# over 1h covers a nightly cadence with margin; unlike the stale-catalog gauge, no-data here is
+# healthy (no ingest attempted yet), so noDataState is OK rather than Alerting.
+
+apiVersion: 1
+
+groups:
+  - orgId: 1
+    name: fishpage-ingest
+    folder: Fishpage
+    interval: 5m
+    rules:
+      - uid: fishpage-held-parse
+        title: Stocklist parse held — implausible parse not reconciled
+        condition: was_held
+        for: 0m
+        noDataState: OK
+        execErrState: Alerting
+        annotations:
+          summary: >-
+            A Stocklist parse was held in incoming as structurally implausible (too few rows kept,
+            or too many In-stock SKUs would be zeroed) and was NOT reconciled. Check the dropped
+            PDF for a partial or column-shifted extraction before the catalog goes stale.
+        labels:
+          severity: page
+        data:
+          - refId: held
+            relativeTimeRange:
+              from: 3600
+              to: 0
+            datasourceUid: grafanacloud-prom
+            model:
+              refId: held
+              instant: true
+              expr: increase(fishpage_ingest_held_total[1h])
+          - refId: was_held
+            datasourceUid: __expr__
+            model:
+              refId: was_held
+              type: threshold
+              expression: held
+              conditions:
+                # Any held parse in the window fires. The counter only ever increases, so a
+                # positive increase means at least one drop was held back since the last evaluation.
+                - evaluator:
+                    type: gt
+                    params: [0]
