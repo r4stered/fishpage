@@ -277,6 +277,26 @@ def test_migration_6_adds_a_nullable_first_seen_to_items(tmp_path):
     assert conn.execute("SELECT first_seen FROM items WHERE sku = '110042'").fetchone()[0] is None
 
 
+def test_migration_7_creates_the_append_only_stocklist_history_table(tmp_path):
+    conn = fresh_conn()
+
+    migrate(conn)
+
+    # The append-only ledger: one row per SKU per Stocklist date, carrying the price and quantity
+    # that Stocklist printed. Keyed by (sku, stocklist_date) so a re-run of the same Stocklist
+    # cannot duplicate a row.
+    assert "stocklist_history" in table_names(conn)
+    info = conn.execute("PRAGMA table_info(stocklist_history)").fetchall()
+    assert {row[1] for row in info} >= {
+        "sku",
+        "stocklist_date",
+        "retail_price",
+        "special_price",
+        "qty",
+    }
+    assert {row[1] for row in info if row[5]} == {"sku", "stocklist_date"}
+
+
 def test_migration_8_adds_a_not_null_default_zero_strain_specific_to_enrichment(tmp_path):
     conn = fresh_conn()
 

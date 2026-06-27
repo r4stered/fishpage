@@ -4,6 +4,9 @@
   {% if card.new_this_week %}
   <span class="badge-new" title="First seen in the latest Stocklist">New this week</span>
   {% endif %}
+  {% if card.back_in_stock %}
+  <span class="badge-back-in-stock" title="Out of stock in the previous Stocklist, in stock now">Back in stock</span>
+  {% endif %}
   {% if card.image %}
   <img class="image" src="/items/{{ item.sku }}/image" alt="{{ item.name }}" loading="lazy">
   {% if card.image.attribution %}
@@ -17,6 +20,11 @@
   <span class="retail-price">${{ item.retail_price }}</span>
   {% if item.special_price is not none %}
   <span class="special-price">special ${{ item.special_price }}</span>
+  {% endif %}
+  {% if card.price_change %}
+  <span class="price-change price-change-{{ card.price_change.direction }}" title="Price {{ card.price_change.direction }} ${{ card.price_change.delta }} since the previous Stocklist">
+    {{ '↑' if card.price_change.direction == 'up' else '↓' }} ${{ card.price_change.delta }}
+  </span>
   {% endif %}
   <span class="qty">{{ item.qty_avail }} available</span>
   {% with sku = item.sku, on_list = False %}{% include "_pick_button.html" %}{% endwith %}

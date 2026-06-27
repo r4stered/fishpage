@@ -82,6 +82,25 @@ class Item:
 
 
 @dataclass(frozen=True)
+class PriorSnapshot:
+    """One SKU's price and quantity as the *previous* Stocklist printed them.
+
+    The append-only history's most recent row strictly before the current Stocklist date, used to
+    derive the week-over-week deltas the live Item row can no longer show: a price change since last
+    week and a return to stock. ``effective_price`` mirrors :class:`Item` — the Special when
+    present, else the Retail — so a change is judged on the price that actually applied last week.
+    """
+
+    retail_price: Decimal
+    special_price: Decimal | None
+    qty: int
+
+    @property
+    def effective_price(self) -> Decimal:
+        return self.retail_price if self.special_price is None else self.special_price
+
+
+@dataclass(frozen=True)
 class PickLine:
     """One line of an Actor's Pick list: an Item gathered to order, with how many of it are wanted.
 

@@ -26,6 +26,9 @@ class Settings:
     incoming_dir: Path
     processed_dir: Path
     poll_interval: float
+    ingest_min_row_fraction: float
+    ingest_max_zeroed_fraction: float
+    ingest_max_retail_price: float
     log_level: str
     host: str
     port: int
@@ -50,6 +53,14 @@ def load_settings(env: Mapping[str, str]) -> Settings:
         processed_dir=Path(env.get("PROCESSED_DIR", DEFAULT_PROCESSED)),
         # Floor the poll interval: a zero or negative override would busy-loop the watcher.
         poll_interval=max(1.0, float(env.get("INGEST_POLL_SECONDS", "30"))),
+        # Ingestion sanity thresholds, measured against the previous Stocklist's in-stock SKUs. A
+        # parse is held in incoming (not reconciled) when it keeps fewer than this fraction of the
+        # prior in-stock rows, or when reconciling it would zero more than the zeroed fraction of
+        # them — either is the shape of a partial or column-shifted parse, not a real restock swing.
+        ingest_min_row_fraction=float(env.get("INGEST_MIN_ROW_FRACTION", "0.8")),
+        ingest_max_zeroed_fraction=float(env.get("INGEST_MAX_ZEROED_FRACTION", "0.5")),
+        # A retail price at or above this is absurd for livestock and flags the Item in the report.
+        ingest_max_retail_price=float(env.get("INGEST_MAX_RETAIL_PRICE", "100000")),
         log_level=env.get("LOG_LEVEL", "INFO"),
         host=env.get("HOST", "127.0.0.1"),
         port=int(env.get("PORT", "8000")),

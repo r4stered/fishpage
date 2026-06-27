@@ -26,6 +26,10 @@
       New this week only
     </label>
     <label>
+      <input type="checkbox" name="back_in_stock_only" value="true"{% if back_in_stock_only %} checked{% endif %}>
+      Back in stock only
+    </label>
+    <label>
       Category
       <select name="category">
         <option value="">All categories</option>
@@ -65,6 +69,6 @@
     {% endfor %}
     <button class="button" type="submit">Apply</button>
   </form>
-  <p>{{ total }} Items</p>
+  <p id="item-count">{{ total }} Items</p>
   {% include "_grid.html" %}
 {% endblock %}

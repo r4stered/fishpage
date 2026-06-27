@@ -18,6 +18,7 @@ from fishpage.images import ImageDecodeError, ImageStore, store_image
 from fishpage.ingest import ingest_pending, stocklist_date
 from fishpage.models import Item, Provenance
 from fishpage.render import (
+    pick_list_export_text,
     render_cards,
     render_catalog,
     render_grid,
@@ -33,10 +34,12 @@ from fishpage.store import (
     all_images,
     all_items,
     clear_enrichment,
+    clear_pick_list,
     image_for,
     item_exists,
     latest_stocklist_date,
     pick_list_for,
+    prior_snapshots,
     remove_from_pick_list,
     set_classifier_override,
     set_pick_list_quantity,
@@ -211,6 +214,35 @@ def create_app(
         lines = pick_list_for(conn, actor)
         return lines, sum((line.line_total for line in lines), Decimal("0"))
 
+    @app.post("/pick-list/export")
+    def pick_list_export(
+        access_email: str | None = Header(default=None, alias=ACCESS_EMAIL_HEADER),
+    ) -> Response:
+        # Registered ahead of POST /pick-list/{sku} so the literal "export" path wins over the SKU
+        # capture. Export is the terminal action: hand back the current Actor's list as an
+        # order-ready plain-text download, then clear it so the served list can't bleed into next
+        # week's order. An empty list has nothing to order — keep it, say so, and skip the wipe.
+        actor = actor_from_header(access_email)
+        lines = pick_list_for(conn, actor)
+        if not lines:
+            return JSONResponse(
+                {"detail": "Pick list is empty — nothing to export"}, status_code=400
+            )
+        body = pick_list_export_text(lines)
+        clear_pick_list(conn, actor)
+        # Audit the mutation: the Actor and line count ride as indexed fields, so an export joins
+        # the same actor query as uploads, overrides, and re-enrichments.
+        _log.info(
+            "Pick list exported (%d lines)",
+            len(lines),
+            extra={"actor": actor, "lines": len(lines)},
+        )
+        return Response(
+            content=body,
+            media_type="text/plain; charset=utf-8",
+            headers={"Content-Disposition": 'attachment; filename="pick-list.txt"'},
+        )
+
     @app.post("/pick-list/{sku}", response_class=HTMLResponse)
     def pick_list_add(
         sku: str,
@@ -293,16 +325,19 @@ def create_app(
         items: list[Item],
         selected_classifiers: dict[str, set[str]],
         latest_date: date | None,
+        priors: dict,
     ) -> list:
         # Resolve every visible Item's Classifiers from one batch read each, then apply the
         # Classifier facets on the *resolved* values — so a manual override is what a chip filters
-        # on, exactly as it is what a badge shows. latest_date drives the new-this-week badge.
+        # on, exactly as it is what a badge shows. latest_date drives the new-this-week badge;
+        # priors (each SKU's previous snapshot) drive the price-changed and back-in-stock badges.
         cards = build_cards(
             items,
             enrichments=all_enrichments(conn),
             images=all_images(conn),
             overrides=all_classifier_overrides(conn),
             latest_date=latest_date,
+            priors=priors,
         )
         return filter_cards_by_classifiers(cards, selected_classifiers)
 
@@ -314,6 +349,7 @@ def create_app(
         size: str | None = None,
         on_special: bool = False,
         new_only: bool = False,
+        back_in_stock_only: bool = False,
         search: str = "",
         sort: str = "",
         page: int = 1,
@@ -330,6 +366,10 @@ def create_app(
         # The latest Stocklist date drives "this week" — the same MAX(last_seen) ingestion keeps
         # monotonic — and is read once for both the new-only filter and the per-card badge.
         latest_date = latest_stocklist_date(conn)
+        # Each SKU's previous snapshot (the history row before the latest Stocklist) drives the
+        # price-changed and back-in-stock derivations, read once for the filter and the per-card
+        # badges.
+        priors = prior_snapshots(conn, latest_date)
         if not include_out_of_stock:
             items = [item for item in items if item.qty_avail > 0]
         items = browse(
@@ -338,7 +378,9 @@ def create_app(
             size=size,
             on_special=on_special,
             new_only=new_only,
+            back_in_stock_only=back_in_stock_only,
             latest_date=latest_date,
+            priors=priors,
             search=search,
             sort=sort,
         )
@@ -347,7 +389,7 @@ def create_app(
             "temperament": set(temperament),
             "plant_safe": set(plant_safe),
         }
-        cards = _filtered_cards(items, selected_classifiers, latest_date)
+        cards = _filtered_cards(items, selected_classifiers, latest_date, priors)
         # Window the filtered cards so even the full ~900-Item set (include out-of-stock on) renders
         # one bounded page of DOM, not all of it. The trailing sentinel points at the next page with
         # the active filters preserved, so a load-more continues the same filtered view.
@@ -371,7 +413,12 @@ def create_app(
         if hx_request:
             return HTMLResponse(
                 render_grid(
-                    window, images_enabled=images_enabled, has_more=has_more, next_url=next_url
+                    window,
+                    images_enabled=images_enabled,
+                    has_more=has_more,
+                    next_url=next_url,
+                    total=len(cards),
+                    oob=True,
                 )
             )
         return HTMLResponse(
@@ -387,6 +434,7 @@ def create_app(
                 selected_size=size,
                 on_special=on_special,
                 new_only=new_only,
+                back_in_stock_only=back_in_stock_only,
                 search=search,
                 sort=sort,
                 selected_classifiers=selected_classifiers,
