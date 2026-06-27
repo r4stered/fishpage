@@ -18,6 +18,7 @@ from fishpage.store import (
     clear_pick_list,
     enrichment_for,
     image_for,
+    images_pending,
     latest_stocklist_date,
     open_store,
     persist_enrichment,
@@ -177,6 +178,30 @@ def test_re_attaching_an_image_replaces_the_prior_one_for_that_sku(tmp_path):
     # One image per Item: a fresh upload supersedes the prior key rather than accumulating rows.
     record = image_for(conn, "110042")
     assert record is not None and record.object_key == "img/new.jpg"
+
+
+def test_images_pending_is_the_enriched_resolved_non_strain_items_without_an_image(tmp_path):
+    conn = open_store(tmp_path / "fishpage.db")
+    unresolved = Item("110300", "-", "Red Flame Sword", Decimal("3.99"), None, 12)
+    reconcile(conn, [ORNATE_M, LEAF, SOLD_OUT, unresolved], JUN19)
+    # Resolved, non-strain, no image yet — the one fetchable case.
+    persist_enrichment(conn, "110042", ORNATE_ENRICHMENT)
+    # Resolved, non-strain, but already has an image — excluded so the backfill never re-fetches it.
+    persist_enrichment(conn, "110092", ORNATE_ENRICHMENT)
+    attach_image(conn, "110092", object_key="110092", provenance=Provenance.MANUAL)
+    # A strain — its wild-type photo would be the wrong fish, so it stays on manual upload.
+    persist_enrichment(conn, "110200", replace(ORNATE_ENRICHMENT, strain_specific=True))
+    # Species never resolved — no query to make, no image to fetch.
+    persist_enrichment(conn, "110300", replace(ORNATE_ENRICHMENT, scientific_name=None))
+
+    pending = images_pending(conn)
+
+    # Exactly the backfill queue: enriched to a storable species, not a strain, no image of any
+    # kind. The resolved species rides along so the backfill can key the source off it without a
+    # second read. An un-enriched Item is absent too — it is the *enrichment* queue's job.
+    assert [sku for sku, _ in pending] == ["110042"]
+    (_, result) = pending[0]
+    assert result.scientific_name == "Polypterus ornatipinnis"
 
 
 def test_re_enrich_leaves_a_manual_image_untouched(tmp_path):

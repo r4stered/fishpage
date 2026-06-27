@@ -12,14 +12,25 @@ from datetime import date
 from decimal import Decimal
 
 import pytest
+from PIL import Image
 
 import fishpage.drainer as drainer
 from fishpage.config import load_settings
-from fishpage.drainer import drain_pending, run_drainer
+from fishpage.drainer import backfill_images, drain_pending, run_drainer
 from fishpage.enricher import Difficulty, EnrichmentResult, PlantSafe, Temperament
-from fishpage.models import Item
+from fishpage.images import StoredImage
+from fishpage.imagesource import SourcedImage
+from fishpage.models import Item, Provenance
 from fishpage.observability import configure_logging
-from fishpage.store import enrichment_for, open_store, reconcile, unenriched_items
+from fishpage.store import (
+    attach_image,
+    enrichment_for,
+    image_for,
+    open_store,
+    persist_enrichment,
+    reconcile,
+    unenriched_items,
+)
 
 
 class _Stop(Exception):
@@ -145,6 +156,34 @@ def test_run_drainer_drains_a_pass_then_sleeps_the_interval(tmp_path):
 
     assert unenriched_items(conn) == []
     assert pauses == [30.0]
+
+
+def test_run_drainer_backfills_existing_images_once_before_polling(tmp_path):
+    conn = open_store(tmp_path / "fishpage.db")
+    reconcile(conn, [ORNATE_M], JUN19)
+    # Already enriched but never imaged — the prod state where the queue is otherwise empty.
+    persist_enrichment(conn, "110042", RESOLVED)
+    store = FakeImageStore()
+    source = FakeImageSource(_sourced())
+
+    def stop_after_first(seconds: float) -> None:
+        raise _Stop
+
+    with pytest.raises(_Stop):
+        run_drainer(
+            conn,
+            RecordingEnricher(),
+            interval=30.0,
+            rate=0.0,
+            sleep=stop_after_first,
+            image_store=store,
+            image_source=source,
+        )
+
+    # The drainer backfills the already-enriched catalog's images at startup — before the first poll
+    # sleep breaks the loop — so a queue that is empty of *un-enriched* Items still collects images.
+    record = image_for(conn, "110042")
+    assert record is not None and record.provenance is Provenance.WIKIMEDIA
 
 
 def test_run_drainer_survives_a_failed_pass_and_keeps_polling(tmp_path, monkeypatch):
@@ -333,3 +372,349 @@ def test_confident_classifiers_do_not_touch_the_unknown_counter(tmp_path, teleme
     drain_pending(conn, ResolvedEnricher())
 
     assert "fishpage.enrichment.classifier_unknown" not in telemetry.metric_names()
+
+
+def _real_jpeg() -> bytes:
+    """A genuine JPEG the store_image optimization seam can decode — a sourced image is real."""
+    buf = io.BytesIO()
+    Image.new("RGB", (32, 24), (40, 160, 90)).save(buf, format="JPEG")
+    return buf.getvalue()
+
+
+SOURCED_JPEG = _real_jpeg()
+
+
+class StrainEnricher:
+    """Resolves a confident species but flags it strain-specific — the wild-type photo is wrong."""
+
+    model = "fake-model"
+
+    def enrich(self, trade_name: str, *, category: str, size: str) -> EnrichmentResult:
+        return EnrichmentResult(
+            scientific_name="Pterophyllum scalare",
+            common_name="Gold Marble Angel",
+            difficulty=Difficulty.INTERMEDIATE,
+            temperament=Temperament.SEMI_AGGRESSIVE,
+            plant_safe=PlantSafe.SAFE,
+            strain_specific=True,
+        )
+
+
+class FakeImageStore:
+    """An in-memory ImageStore — the bucket the drainer puts a sourced image into, no network."""
+
+    def __init__(self):
+        self.objects: dict[str, StoredImage] = {}
+
+    def put(self, key: str, data: bytes, *, content_type: str) -> None:
+        self.objects[key] = StoredImage(data=data, content_type=content_type)
+
+    def get(self, key: str) -> StoredImage | None:
+        return self.objects.get(key)
+
+
+class FakeImageSource:
+    """An injectable ImageSource that records the species it was asked for and returns a canned
+    result — a sourced image, or ``None`` for the honest gap. The suite never hits Wikimedia."""
+
+    def __init__(self, result: SourcedImage | None):
+        self._result = result
+        self.species: list[str] = []
+
+    def fetch(self, species: str) -> SourcedImage | None:
+        self.species.append(species)
+        return self._result
+
+
+def _sourced() -> SourcedImage:
+    return SourcedImage(
+        data=SOURCED_JPEG,
+        license="CC BY-SA 4.0",
+        attribution="A. Photographer",
+        source_url="https://commons.wikimedia.org/wiki/File:Fish.jpg",
+    )
+
+
+def test_drain_stores_a_wikimedia_image_for_a_resolved_wild_type(tmp_path):
+    conn = open_store(tmp_path / "fishpage.db")
+    reconcile(conn, [ORNATE_M], JUN19)
+    store = FakeImageStore()
+    source = FakeImageSource(_sourced())
+
+    drain_pending(conn, ResolvedEnricher(), image_store=store, image_source=source)
+
+    # A resolved, non-strain species is the store-confident case: the drainer keys the source off
+    # the resolved species and stores the result with wikimedia Provenance plus its licence,
+    # attribution, and source URL — the bytes in the bucket, only the metadata in the DB.
+    assert source.species == ["Polypterus ornatipinnis"]
+    record = image_for(conn, "110042")
+    assert record is not None
+    assert record.provenance is Provenance.WIKIMEDIA
+    assert record.license == "CC BY-SA 4.0"
+    assert record.attribution == "A. Photographer"
+    assert record.source_url == "https://commons.wikimedia.org/wiki/File:Fish.jpg"
+    assert Image.open(io.BytesIO(store.objects["110042"].data)).format == "WEBP"
+
+
+def test_drain_skips_the_auto_image_for_a_strain(tmp_path):
+    conn = open_store(tmp_path / "fishpage.db")
+    reconcile(conn, [ORNATE_M], JUN19)
+    store = FakeImageStore()
+    source = FakeImageSource(_sourced())
+
+    drain_pending(conn, StrainEnricher(), image_store=store, image_source=source)
+
+    # A strain resolves to a real species with confidence, but its wild-type photo is the wrong
+    # fish — so the gate never even queries the source, and no image is stored.
+    assert source.species == []
+    assert image_for(conn, "110042") is None
+    assert store.objects == {}
+
+
+def test_drain_skips_the_auto_image_for_an_unresolved_species(tmp_path):
+    conn = open_store(tmp_path / "fishpage.db")
+    reconcile(conn, [ORNATE_M], JUN19)
+    store = FakeImageStore()
+    source = FakeImageSource(_sourced())
+
+    drain_pending(conn, GappyEnricher(), image_store=store, image_source=source)
+
+    # No species resolved — the honest gap. No query, no image; the Item stays on the manual path.
+    assert source.species == []
+    assert image_for(conn, "110042") is None
+
+
+def test_drain_never_clobbers_a_manual_image(tmp_path):
+    conn = open_store(tmp_path / "fishpage.db")
+    reconcile(conn, [ORNATE_M], JUN19)
+    # A human already uploaded an image for this Item before it was enriched.
+    attach_image(conn, "110042", object_key="110042", provenance=Provenance.MANUAL)
+    store = FakeImageStore()
+    source = FakeImageSource(_sourced())
+
+    drain_pending(conn, ResolvedEnricher(), image_store=store, image_source=source)
+
+    # A manual image is authoritative and un-clobberable: even a resolved wild-type does not
+    # overwrite it, and the source is never queried for a SKU that already has the human's image.
+    assert source.species == []
+    record = image_for(conn, "110042")
+    assert record is not None and record.provenance is Provenance.MANUAL
+    assert record.object_key == "110042"
+
+
+def test_drain_leaves_no_image_when_the_source_finds_none(tmp_path):
+    conn = open_store(tmp_path / "fishpage.db")
+    reconcile(conn, [ORNATE_M], JUN19)
+    store = FakeImageStore()
+    source = FakeImageSource(None)  # no usable, commercial-free image for this species
+
+    result = drain_pending(conn, ResolvedEnricher(), image_store=store, image_source=source)
+
+    # The source found nothing storable; the Item is still enriched and counted as drained — the
+    # missing image is an accepted outcome, not a failure.
+    assert source.species == ["Polypterus ornatipinnis"]
+    assert image_for(conn, "110042") is None
+    assert result.drained == ["110042"]
+
+
+def test_drain_without_an_image_source_only_fills_classifiers(tmp_path):
+    conn = open_store(tmp_path / "fishpage.db")
+    reconcile(conn, [ORNATE_M], JUN19)
+
+    # The auto-image path is opt-in: with no store/source wired (the default), the drainer fills
+    # Classifiers exactly as before and attaches no image.
+    drain_pending(conn, ResolvedEnricher())
+
+    assert enrichment_for(conn, "110042") is not None
+    assert image_for(conn, "110042") is None
+
+
+def _acquired(telemetry) -> dict[frozenset, float]:
+    return {
+        frozenset(attrs.items()): value
+        for attrs, value in telemetry.points("fishpage.image.acquired")
+    }
+
+
+def test_a_stored_auto_image_records_a_stored_acquisition(tmp_path, telemetry):
+    conn = open_store(tmp_path / "fishpage.db")
+    reconcile(conn, [ORNATE_M], JUN19)
+
+    drain_pending(
+        conn,
+        ResolvedEnricher(),
+        image_store=FakeImageStore(),
+        image_source=FakeImageSource(_sourced()),
+    )
+
+    # A landed auto-image counts once as `stored`, so acquisition throughput reads off this counter
+    # alongside the bytes the optimization seam already records.
+    assert _acquired(telemetry)[frozenset({"outcome": "stored"}.items())] == 1
+
+
+def test_a_source_with_no_storable_image_records_the_honesty_gap(tmp_path, telemetry):
+    conn = open_store(tmp_path / "fishpage.db")
+    reconcile(conn, [ORNATE_M], JUN19)
+
+    drain_pending(
+        conn, ResolvedEnricher(), image_store=FakeImageStore(), image_source=FakeImageSource(None)
+    )
+
+    # A resolved, non-strain species that yields no commercial-free image is the image honesty gap —
+    # the same kind of early-warning signal as an unresolved species — counted as `none` so silently
+    # degrading source coverage (or an over-strict licence filter) is visible.
+    assert _acquired(telemetry)[frozenset({"outcome": "none"}.items())] == 1
+
+
+def test_a_failed_fetch_records_a_failed_acquisition(tmp_path, telemetry):
+    conn = open_store(tmp_path / "fishpage.db")
+    reconcile(conn, [ORNATE_M], JUN19)
+
+    class BoomSource:
+        def fetch(self, species: str) -> SourcedImage | None:
+            raise RuntimeError("wikimedia blew up")
+
+    drain_pending(conn, ResolvedEnricher(), image_store=FakeImageStore(), image_source=BoomSource())
+
+    # The outbound source can fail and rate-limit; a raised fetch counts as `failed`, so the failure
+    # rate of the image source reads off the same counter the way the enrichment call's does.
+    assert _acquired(telemetry)[frozenset({"outcome": "failed"}.items())] == 1
+
+
+def test_a_gate_skip_never_records_an_acquisition(tmp_path, telemetry):
+    conn = open_store(tmp_path / "fishpage.db")
+    reconcile(conn, [ORNATE_M], JUN19)
+
+    drain_pending(
+        conn,
+        StrainEnricher(),
+        image_store=FakeImageStore(),
+        image_source=FakeImageSource(_sourced()),
+    )
+
+    # A strain is never queried — it is not an acquisition attempt, so it touches no outcome on the
+    # counter rather than inflating the `none` honesty gap with by-design skips.
+    assert "fishpage.image.acquired" not in telemetry.metric_names()
+
+
+RESOLVED = EnrichmentResult(
+    scientific_name="Polypterus ornatipinnis",
+    common_name="Ornate Bichir",
+    difficulty=Difficulty.INTERMEDIATE,
+    temperament=Temperament.SEMI_AGGRESSIVE,
+    plant_safe=PlantSafe.SAFE,
+    strain_specific=False,
+)
+
+
+def test_backfill_images_stores_an_image_for_each_pending_enriched_item(tmp_path):
+    conn = open_store(tmp_path / "fishpage.db")
+    reconcile(conn, [ORNATE_M, LEAF], JUN19)
+    # Two Items already enriched to a storable species but never imaged — the prod backfill case
+    # after enrichment ran before the image source existed.
+    persist_enrichment(conn, "110042", RESOLVED)
+    persist_enrichment(conn, "110092", RESOLVED)
+    store = FakeImageStore()
+    source = FakeImageSource(_sourced())
+
+    landed = backfill_images(conn, store, source)
+
+    # The backfill keys the source off each Item's stored species and stores a wikimedia image — no
+    # enricher and no LLM call in sight, so an already-enriched catalog gets images for free.
+    assert source.species == ["Polypterus ornatipinnis", "Polypterus ornatipinnis"]
+    first = image_for(conn, "110042")
+    second = image_for(conn, "110092")
+    assert first is not None and first.provenance is Provenance.WIKIMEDIA
+    assert second is not None and second.provenance is Provenance.WIKIMEDIA
+    assert landed == 2
+
+
+def test_backfill_images_is_a_noop_on_an_empty_queue(tmp_path):
+    conn = open_store(tmp_path / "fishpage.db")
+    reconcile(conn, [ORNATE_M], JUN19)  # un-enriched: not in the image backfill queue
+    source = FakeImageSource(_sourced())
+
+    landed = backfill_images(conn, FakeImageStore(), source)
+
+    # Nothing enriched-but-imageless means nothing to fetch — the source is never queried.
+    assert source.species == []
+    assert landed == 0
+
+
+def test_backfill_images_paces_calls_with_the_injected_sleeper(tmp_path):
+    conn = open_store(tmp_path / "fishpage.db")
+    reconcile(conn, [ORNATE_M, LEAF], JUN19)
+    persist_enrichment(conn, "110042", RESOLVED)
+    persist_enrichment(conn, "110092", RESOLVED)
+    pauses: list[float] = []
+
+    backfill_images(
+        conn, FakeImageStore(), FakeImageSource(_sourced()), rate=0.5, sleep=pauses.append
+    )
+
+    # Each fetch is several Wikimedia round-trips, so the backfill rate-limits itself between Items
+    # rather than firing ~900 fetches at the API at once.
+    assert pauses == [0.5, 0.5]
+
+
+def test_backfill_images_skips_an_item_that_already_has_an_image(tmp_path):
+    conn = open_store(tmp_path / "fishpage.db")
+    reconcile(conn, [ORNATE_M], JUN19)
+    persist_enrichment(conn, "110042", RESOLVED)
+    attach_image(conn, "110042", object_key="110042", provenance=Provenance.MANUAL)
+    source = FakeImageSource(_sourced())
+
+    backfill_images(conn, FakeImageStore(), source)
+
+    # An Item with an image — here a manual upload — is not in the queue, so the backfill never
+    # touches it and the human's image stands.
+    assert source.species == []
+    record = image_for(conn, "110042")
+    assert record is not None and record.provenance is Provenance.MANUAL
+
+
+def test_backfill_logs_a_start_line_and_a_completion_summary(tmp_path, log_stream):
+    conn = open_store(tmp_path / "fishpage.db")
+    reconcile(conn, [ORNATE_M, LEAF], JUN19)
+    persist_enrichment(conn, "110042", RESOLVED)
+    persist_enrichment(conn, "110092", RESOLVED)
+
+    backfill_images(conn, FakeImageStore(), FakeImageSource(_sourced()))
+
+    # A non-empty backfill announces its queue depth at the top and reports how many landed at the
+    # end, so the no-image tail shows as a shortfall rather than a silent stall.
+    (start,) = [li for li in _lines(log_stream) if "Backfilling images" in li["message"]]
+    assert start["pending"] == 2
+    (summary,) = [li for li in _lines(log_stream) if "Image backfill complete" in li["message"]]
+    assert summary["landed"] == 2
+    assert summary["pending"] == 2
+
+
+def test_backfill_on_an_empty_queue_logs_nothing(tmp_path, log_stream):
+    conn = open_store(tmp_path / "fishpage.db")
+    reconcile(conn, [ORNATE_M], JUN19)  # un-enriched — not in the image backfill queue
+
+    backfill_images(conn, FakeImageStore(), FakeImageSource(_sourced()))
+
+    # Nothing to image stays silent, so a process that restarts with the catalog fully imaged does
+    # not log an empty backfill every boot.
+    assert _lines(log_stream) == []
+
+
+def test_an_auto_image_failure_does_not_fail_the_enrichment(tmp_path):
+    conn = open_store(tmp_path / "fishpage.db")
+    reconcile(conn, [ORNATE_M], JUN19)
+    store = FakeImageStore()
+
+    class BoomSource:
+        def fetch(self, species: str) -> SourcedImage | None:
+            raise RuntimeError("wikimedia blew up")
+
+    result = drain_pending(conn, ResolvedEnricher(), image_store=store, image_source=BoomSource())
+
+    # A source that raises is best-effort failure: the Classifiers already persisted, the SKU still
+    # counts as drained, and no image lands — the image step never takes the enrichment down.
+    assert result.drained == ["110042"]
+    assert result.failed == 0
+    assert enrichment_for(conn, "110042") is not None
+    assert image_for(conn, "110042") is None
