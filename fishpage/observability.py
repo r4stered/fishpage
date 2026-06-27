@@ -48,6 +48,8 @@ class _Instruments:
     rows_skipped: Counter
     reuse_flags: Counter
     monotonicity_skips: Counter
+    ingest_report: Counter
+    ingest_held: Counter
     images_optimized: Counter
     image_original_bytes: Counter
     image_optimized_bytes: Counter
@@ -179,6 +181,33 @@ def record_reuse_flag() -> None:
 def record_monotonicity_skip() -> None:
     """Record that one dropped Stocklist was held back for being no newer than the catalog."""
     _instruments.monotonicity_skips.add(1)
+
+
+def record_ingestion_report(
+    *, new: int, returned: int, zeroed: int, price_changed: int, flagged: int
+) -> None:
+    """Record the per-ingest report counts, each tagged by which kind of change it is.
+
+    One counter carries all five kinds on a ``kind`` attribute (low cardinality), so a dashboard
+    reads new/returned/zeroed/price-changed/flagged off the same series. A sudden spike in
+    ``zeroed`` or ``flagged`` is the early signal of a partial or column-shifted parse that slipped
+    the hard hold.
+    """
+    _instruments.ingest_report.add(new, {"kind": "new"})
+    _instruments.ingest_report.add(returned, {"kind": "returned"})
+    _instruments.ingest_report.add(zeroed, {"kind": "zeroed"})
+    _instruments.ingest_report.add(price_changed, {"kind": "price_changed"})
+    _instruments.ingest_report.add(flagged, {"kind": "flagged"})
+
+
+def record_ingest_held() -> None:
+    """Record that one parse was held in incoming as structurally implausible, not reconciled.
+
+    This is the signal the held-parse alert keys on: any increase means a Stocklist parsed to a
+    shape implausible enough to suspect a partial or column-shifted extraction, so reconciling it
+    would have corrupted the catalog and zeroed live SKUs.
+    """
+    _instruments.ingest_held.add(1)
 
 
 def record_image_optimized(bytes_in: int, bytes_out: int, *, provenance: Provenance) -> None:
@@ -349,6 +378,17 @@ def _install(
             "fishpage.ingest.monotonicity_skips",
             unit="{drop}",
             description="Stocklist drops held back for not being newer than the catalog",
+        ),
+        ingest_report=meter.create_counter(
+            "fishpage.ingest.report",
+            unit="{item}",
+            description="Per-ingest change counts by kind: new, returned, zeroed, "
+            "price_changed, flagged",
+        ),
+        ingest_held=meter.create_counter(
+            "fishpage.ingest.held",
+            unit="{drop}",
+            description="Parses held in incoming as structurally implausible, not reconciled",
         ),
         images_optimized=meter.create_counter(
             "fishpage.image.optimized",
