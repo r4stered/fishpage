@@ -1,3 +1,9 @@
 <ul class="catalog-grid">
 {% include "_cards.html" %}
 </ul>
+{% if oob %}
+{# The count lives outside the swapped grid; an out-of-band swap updates it in the same response so a
+   filter change refreshes the count alongside the cards. Emitted only for the HTMX fragment path —
+   the full page already renders the count, so this would otherwise duplicate it. #}
+<p id="item-count" hx-swap-oob="true">{{ total }} Items</p>
+{% endif %}
