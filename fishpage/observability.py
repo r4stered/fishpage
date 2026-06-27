@@ -54,6 +54,7 @@ class _Instruments:
     image_original_bytes: Counter
     image_optimized_bytes: Counter
     image_optimize_errors: Counter
+    image_acquired: Counter
     enrichment_tokens: Counter
     enrichment_calls: Counter
     enrichment_species_unresolved: Counter
@@ -235,6 +236,20 @@ def record_image_optimize_error(*, provenance: Provenance) -> None:
     _instruments.image_optimize_errors.add(1, {"provenance": provenance.value})
 
 
+def record_image_acquired(*, outcome: str) -> None:
+    """Record one auto-image acquisition attempt, tagged by its ``outcome``.
+
+    Recorded only when the gate actually queries the source — a resolved, non-strain Item with no
+    manual image — so by-design skips never reach it. ``stored`` is a landed image; ``none`` is the
+    image honesty gap (a resolved species with no commercial-free photo), the early signal that
+    source coverage is degrading or the licence filter is too strict; ``failed`` is a fetch that
+    raised — the outbound source can fail and rate-limit. The dashboard derives the gap and failure
+    rates from these outcomes. The SKU is high-cardinality and rides the per-image log, not this
+    counter.
+    """
+    _instruments.image_acquired.add(1, {"outcome": outcome})
+
+
 def record_enrichment_tokens(input_tokens: int, output_tokens: int, *, model: str) -> None:
     """Record the token spend of one Enrichment call, split by direction and tagged by model.
 
@@ -409,6 +424,11 @@ def _install(
             "fishpage.image.optimize_errors",
             unit="{error}",
             description="Images that failed to decode at the optimization seam",
+        ),
+        image_acquired=meter.create_counter(
+            "fishpage.image.acquired",
+            unit="{acquisition}",
+            description="Auto-image source acquisitions, by outcome: stored, none, failed",
         ),
         enrichment_tokens=meter.create_counter(
             "fishpage.enrichment.tokens",

@@ -529,6 +529,74 @@ def test_drain_without_an_image_source_only_fills_classifiers(tmp_path):
     assert image_for(conn, "110042") is None
 
 
+def _acquired(telemetry) -> dict[frozenset, float]:
+    return {
+        frozenset(attrs.items()): value
+        for attrs, value in telemetry.points("fishpage.image.acquired")
+    }
+
+
+def test_a_stored_auto_image_records_a_stored_acquisition(tmp_path, telemetry):
+    conn = open_store(tmp_path / "fishpage.db")
+    reconcile(conn, [ORNATE_M], JUN19)
+
+    drain_pending(
+        conn,
+        ResolvedEnricher(),
+        image_store=FakeImageStore(),
+        image_source=FakeImageSource(_sourced()),
+    )
+
+    # A landed auto-image counts once as `stored`, so acquisition throughput reads off this counter
+    # alongside the bytes the optimization seam already records.
+    assert _acquired(telemetry)[frozenset({"outcome": "stored"}.items())] == 1
+
+
+def test_a_source_with_no_storable_image_records_the_honesty_gap(tmp_path, telemetry):
+    conn = open_store(tmp_path / "fishpage.db")
+    reconcile(conn, [ORNATE_M], JUN19)
+
+    drain_pending(
+        conn, ResolvedEnricher(), image_store=FakeImageStore(), image_source=FakeImageSource(None)
+    )
+
+    # A resolved, non-strain species that yields no commercial-free image is the image honesty gap —
+    # the same kind of early-warning signal as an unresolved species — counted as `none` so silently
+    # degrading source coverage (or an over-strict licence filter) is visible.
+    assert _acquired(telemetry)[frozenset({"outcome": "none"}.items())] == 1
+
+
+def test_a_failed_fetch_records_a_failed_acquisition(tmp_path, telemetry):
+    conn = open_store(tmp_path / "fishpage.db")
+    reconcile(conn, [ORNATE_M], JUN19)
+
+    class BoomSource:
+        def fetch(self, species: str) -> SourcedImage | None:
+            raise RuntimeError("wikimedia blew up")
+
+    drain_pending(conn, ResolvedEnricher(), image_store=FakeImageStore(), image_source=BoomSource())
+
+    # The outbound source can fail and rate-limit; a raised fetch counts as `failed`, so the failure
+    # rate of the image source reads off the same counter the way the enrichment call's does.
+    assert _acquired(telemetry)[frozenset({"outcome": "failed"}.items())] == 1
+
+
+def test_a_gate_skip_never_records_an_acquisition(tmp_path, telemetry):
+    conn = open_store(tmp_path / "fishpage.db")
+    reconcile(conn, [ORNATE_M], JUN19)
+
+    drain_pending(
+        conn,
+        StrainEnricher(),
+        image_store=FakeImageStore(),
+        image_source=FakeImageSource(_sourced()),
+    )
+
+    # A strain is never queried — it is not an acquisition attempt, so it touches no outcome on the
+    # counter rather than inflating the `none` honesty gap with by-design skips.
+    assert "fishpage.image.acquired" not in telemetry.metric_names()
+
+
 RESOLVED = EnrichmentResult(
     scientific_name="Polypterus ornatipinnis",
     common_name="Ornate Bichir",
@@ -603,6 +671,34 @@ def test_backfill_images_skips_an_item_that_already_has_an_image(tmp_path):
     assert source.species == []
     record = image_for(conn, "110042")
     assert record is not None and record.provenance is Provenance.MANUAL
+
+
+def test_backfill_logs_a_start_line_and_a_completion_summary(tmp_path, log_stream):
+    conn = open_store(tmp_path / "fishpage.db")
+    reconcile(conn, [ORNATE_M, LEAF], JUN19)
+    persist_enrichment(conn, "110042", RESOLVED)
+    persist_enrichment(conn, "110092", RESOLVED)
+
+    backfill_images(conn, FakeImageStore(), FakeImageSource(_sourced()))
+
+    # A non-empty backfill announces its queue depth at the top and reports how many landed at the
+    # end, so the no-image tail shows as a shortfall rather than a silent stall.
+    (start,) = [li for li in _lines(log_stream) if "Backfilling images" in li["message"]]
+    assert start["pending"] == 2
+    (summary,) = [li for li in _lines(log_stream) if "Image backfill complete" in li["message"]]
+    assert summary["landed"] == 2
+    assert summary["pending"] == 2
+
+
+def test_backfill_on_an_empty_queue_logs_nothing(tmp_path, log_stream):
+    conn = open_store(tmp_path / "fishpage.db")
+    reconcile(conn, [ORNATE_M], JUN19)  # un-enriched — not in the image backfill queue
+
+    backfill_images(conn, FakeImageStore(), FakeImageSource(_sourced()))
+
+    # Nothing to image stays silent, so a process that restarts with the catalog fully imaged does
+    # not log an empty backfill every boot.
+    assert _lines(log_stream) == []
 
 
 def test_an_auto_image_failure_does_not_fail_the_enrichment(tmp_path):

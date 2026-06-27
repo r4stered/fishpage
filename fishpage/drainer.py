@@ -135,6 +135,15 @@ def backfill_images(
             landed += 1
         if rate:
             sleep(rate)
+    # Close the loop the start line opened: how many of the queue actually got an image, so the
+    # no-image tail (resolved species, no commercial-free photo) is visible as the shortfall rather
+    # than reading as a silent stall. Per-outcome detail rides the fishpage.image.acquired counter.
+    _log.info(
+        "Image backfill complete: %d of %d enriched Item(s) imaged",
+        landed,
+        len(pending),
+        extra={"landed": landed, "pending": len(pending)},
+    )
     return landed
 
 
@@ -163,6 +172,7 @@ def _acquire_auto_image(
     try:
         sourced = image_source.fetch(result.scientific_name)
         if sourced is None:
+            observability.record_image_acquired(outcome="none")
             return
         store_image(
             image_store,
@@ -175,7 +185,9 @@ def _acquire_auto_image(
             source_url=sourced.source_url,
             max_dimension=max_dimension,
         )
+        observability.record_image_acquired(outcome="stored")
     except Exception:
+        observability.record_image_acquired(outcome="failed")
         _log.exception("Auto-image failed for SKU %s; leaving it on the manual path", sku)
 
 
