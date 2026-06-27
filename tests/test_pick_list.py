@@ -17,6 +17,7 @@ from fishpage.models import Item
 from fishpage.store import open_store, reconcile
 
 JUN19 = date(2026, 6, 19)
+JUN26 = date(2026, 6, 26)
 ORNATE_M = Item("110042", "M", "Bichir Ornate", Decimal("28.99"), None, 15)
 LEAF = Item("110092", "-", "Leaf Fish Leopard Ctenopoma", Decimal("5.99"), Decimal("4.99"), 30)
 
@@ -25,10 +26,14 @@ BOB = {ACCESS_EMAIL_HEADER: "bob@sdc.test"}
 HX = {"HX-Request": "true"}
 
 
-def _client(tmp_path, *, seed=(ORNATE_M, LEAF)):
+def _store(tmp_path, *, seed=(ORNATE_M, LEAF)):
     conn = open_store(tmp_path / "fishpage.db")
     reconcile(conn, list(seed), JUN19)
-    return TestClient(create_app(conn))
+    return conn
+
+
+def _client(tmp_path, *, seed=(ORNATE_M, LEAF)):
+    return TestClient(create_app(_store(tmp_path, seed=seed)))
 
 
 def test_add_from_a_card_puts_the_item_on_the_actors_pick_list(tmp_path):
@@ -132,3 +137,70 @@ def test_one_actor_never_sees_anothers_list_over_http(tmp_path):
 
     # Bob's view is empty — the list is keyed by the Access email, so Alice's gather is hers alone.
     assert 'data-sku="110042"' not in client.get("/pick-list", headers=BOB).text
+
+
+def test_the_view_offers_an_export_button_only_when_the_list_has_lines(tmp_path):
+    client = _client(tmp_path)
+    assert 'action="/pick-list/export"' not in client.get("/pick-list", headers=ALICE).text
+
+    client.post("/pick-list/110042", headers=ALICE)
+    assert 'action="/pick-list/export"' in client.get("/pick-list", headers=ALICE).text
+
+
+def test_export_returns_an_order_ready_download_of_sku_name_quantity(tmp_path):
+    client = _client(tmp_path)
+    client.post("/pick-list/110092", headers=ALICE)  # LEAF
+    client.post("/pick-list/110092/quantity", data={"quantity": "3"}, headers=ALICE)
+
+    resp = client.post("/pick-list/export", headers=ALICE)
+
+    # The artifact is a plain-text attachment the buyer can paste into the order or save to disk.
+    assert resp.status_code == 200
+    assert resp.headers["content-type"].startswith("text/plain")
+    assert "attachment" in resp.headers["content-disposition"]
+    # One line carrying SKU, name, and the chosen quantity.
+    assert resp.text == "110092\tLeaf Fish Leopard Ctenopoma\t3"
+
+
+def test_export_clears_the_actors_list(tmp_path):
+    client = _client(tmp_path)
+    client.post("/pick-list/110042", headers=ALICE)
+
+    client.post("/pick-list/export", headers=ALICE)
+
+    # Export is terminal: the served list is wiped so it can't bleed into next week's order.
+    assert 'data-sku="110042"' not in client.get("/pick-list", headers=ALICE).text
+
+
+def test_export_and_clear_are_scoped_to_the_current_actor(tmp_path):
+    client = _client(tmp_path)
+    client.post("/pick-list/110042", headers=ALICE)
+    client.post("/pick-list/110092", headers=BOB)
+
+    # Alice exports; only her line lands in the file and only her list is cleared.
+    resp = client.post("/pick-list/export", headers=ALICE)
+    assert "110042" in resp.text
+    assert "110092" not in resp.text
+    assert 'data-sku="110042"' not in client.get("/pick-list", headers=ALICE).text
+    assert 'data-sku="110092"' in client.get("/pick-list", headers=BOB).text
+
+
+def test_exporting_an_empty_list_is_rejected_and_clears_nothing(tmp_path):
+    client = _client(tmp_path)
+    assert client.post("/pick-list/export", headers=ALICE).status_code == 400
+
+
+def test_an_out_of_stock_line_is_flagged_on_export_not_dropped(tmp_path):
+    conn = _store(tmp_path)
+    client = TestClient(create_app(conn))
+    client.post("/pick-list/110042", headers=ALICE)
+    # A newer Stocklist omitting the gathered SKU zeroes its availability — out of stock, kept.
+    reconcile(conn, [LEAF], JUN26)
+
+    resp = client.post("/pick-list/export", headers=ALICE)
+
+    # The stale line survives the export and carries a visible out-of-stock flag with its last-seen
+    # date, so the buyer notices before placing the order.
+    assert "110042" in resp.text
+    assert "OUT OF STOCK" in resp.text
+    assert "2026-06-19" in resp.text

@@ -121,6 +121,24 @@ def render_pick_list(lines: list[PickLine], total: Decimal) -> str:
     return _env.get_template("pick_list.html").render(lines=lines, total=total)
 
 
+def pick_list_export_text(lines: list[PickLine]) -> str:
+    """Build the order-ready plain-text Pick list the buyer pastes into the supplier's order.
+
+    One tab-separated line per Item — SKU, name, quantity — so it pastes cleanly into a spreadsheet
+    or order form. A line whose Item has dropped to zero availability is kept, never silently
+    dropped, but tagged ``[OUT OF STOCK — last seen <date>]`` so the buyer notices before ordering;
+    the last-seen date lets them tell a this-week stockout from a long-discontinued SKU.
+    """
+    rows = []
+    for line in lines:
+        cells = [line.item.sku, line.item.name, str(line.quantity)]
+        if line.item.qty_avail == 0:
+            seen = "never" if line.item.last_seen is None else line.item.last_seen.isoformat()
+            cells.append(f"[OUT OF STOCK — last seen {seen}]")
+        rows.append("\t".join(cells))
+    return "\n".join(rows)
+
+
 def render_upload(*, message: str = "", error: bool = False) -> str:
     """Render the Stocklist upload page, optionally carrying a post-submit status line.
 
