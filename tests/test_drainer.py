@@ -38,6 +38,7 @@ def _result(common_name: str) -> EnrichmentResult:
         difficulty=Difficulty.UNKNOWN,
         temperament=Temperament.UNKNOWN,
         plant_safe=PlantSafe.UNKNOWN,
+        strain_specific=False,
     )
 
 
@@ -175,6 +176,7 @@ class GappyEnricher:
             difficulty=Difficulty.UNKNOWN,
             temperament=Temperament.UNKNOWN,
             plant_safe=PlantSafe.UNKNOWN,
+            strain_specific=False,
         )
 
 
@@ -190,6 +192,7 @@ class ResolvedEnricher:
             difficulty=Difficulty.INTERMEDIATE,
             temperament=Temperament.SEMI_AGGRESSIVE,
             plant_safe=PlantSafe.SAFE,
+            strain_specific=False,
         )
 
 

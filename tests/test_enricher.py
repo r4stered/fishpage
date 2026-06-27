@@ -79,6 +79,7 @@ def test_classifiers_support_unknown_and_species_supports_none():
         difficulty=Difficulty.UNKNOWN,
         temperament=Temperament.UNKNOWN,
         plant_safe=PlantSafe.UNKNOWN,
+        strain_specific=False,
     )
 
     assert result.scientific_name is None
@@ -107,6 +108,7 @@ def test_parse_maps_a_well_formed_payload_to_a_result():
             "difficulty": "intermediate",
             "temperament": "semi_aggressive",
             "plant_safe": "safe",
+            "strain_specific": True,
         }
     )
 
@@ -116,7 +118,16 @@ def test_parse_maps_a_well_formed_payload_to_a_result():
         difficulty=Difficulty.INTERMEDIATE,
         temperament=Temperament.SEMI_AGGRESSIVE,
         plant_safe=PlantSafe.SAFE,
+        strain_specific=True,
     )
+
+
+def test_parse_reads_strain_specific_as_a_bool_defaulting_to_false():
+    # A line-bred strain comes back true; a wild type false; an absent flag is the safe default
+    # (false), so a missing value never spuriously skips automatic image acquisition.
+    assert parse_enrichment({"strain_specific": True}).strain_specific is True
+    assert parse_enrichment({"strain_specific": False}).strain_specific is False
+    assert parse_enrichment({}).strain_specific is False
 
 
 def test_parse_coerces_an_out_of_vocabulary_classifier_to_unknown():
@@ -169,6 +180,15 @@ def test_tool_schema_constrains_each_classifier_to_its_vocabulary():
     assert schema["additionalProperties"] is False
 
 
+def test_tool_schema_requires_a_boolean_strain_specific():
+    schema = build_tool()["input_schema"]
+
+    # The strain flag is a required boolean: the model must say whether the trade name is a
+    # line-bred variant whose wild-type photo would be the wrong fish.
+    assert schema["properties"]["strain_specific"] == {"type": "boolean"}
+    assert "strain_specific" in schema["required"]
+
+
 def test_tool_is_strict_and_carries_the_species_fields():
     tool = build_tool()
 
@@ -185,6 +205,7 @@ def test_enrich_returns_the_parsed_result_from_the_forced_tool_call():
             "difficulty": "intermediate",
             "temperament": "semi_aggressive",
             "plant_safe": "safe",
+            "strain_specific": False,
         }
     )
 
@@ -196,6 +217,7 @@ def test_enrich_returns_the_parsed_result_from_the_forced_tool_call():
         difficulty=Difficulty.INTERMEDIATE,
         temperament=Temperament.SEMI_AGGRESSIVE,
         plant_safe=PlantSafe.SAFE,
+        strain_specific=False,
     )
 
 
@@ -306,6 +328,7 @@ def test_a_fake_enricher_records_no_token_spend(telemetry):
         difficulty=Difficulty.UNKNOWN,
         temperament=Temperament.UNKNOWN,
         plant_safe=PlantSafe.UNKNOWN,
+        strain_specific=False,
     )
 
     FakeEnricher(canned).enrich("Leaf Fish", category="Monster/Oddball", size="-")
@@ -338,8 +361,38 @@ def test_a_fake_enricher_is_an_injectable_enricher():
         difficulty=Difficulty.INTERMEDIATE,
         temperament=Temperament.SEMI_AGGRESSIVE,
         plant_safe=PlantSafe.SAFE,
+        strain_specific=False,
     )
     fake = FakeEnricher(canned)
 
     assert isinstance(fake, Enricher)
     assert fake.enrich("Bichir Ornate", category="Monster/Oddball", size="M") == canned
+
+
+def test_a_fake_enricher_carries_a_strain_or_wild_type_result():
+    # The injected fake the suite uses instead of the network exercises both reads the model makes:
+    # a line-bred strain whose wild-type photo would mislead an order, and a true wild type.
+    strain = EnrichmentResult(
+        scientific_name="Pterophyllum scalare",
+        common_name="Gold Marble Angel",
+        difficulty=Difficulty.INTERMEDIATE,
+        temperament=Temperament.SEMI_AGGRESSIVE,
+        plant_safe=PlantSafe.SAFE,
+        strain_specific=True,
+    )
+    wild_type = EnrichmentResult(
+        scientific_name="Polypterus ornatipinnis",
+        common_name="Ornate Bichir",
+        difficulty=Difficulty.INTERMEDIATE,
+        temperament=Temperament.SEMI_AGGRESSIVE,
+        plant_safe=PlantSafe.SAFE,
+        strain_specific=False,
+    )
+
+    assert (
+        FakeEnricher(strain).enrich("Gold Marble Angel", category="Angelfish", size="M") == strain
+    )
+    assert (
+        FakeEnricher(wild_type).enrich("Bichir Ornate", category="Monster/Oddball", size="M")
+        == wild_type
+    )

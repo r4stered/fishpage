@@ -26,6 +26,7 @@ AN_ENRICHMENT = EnrichmentResult(
     difficulty=Difficulty.INTERMEDIATE,
     temperament=Temperament.SEMI_AGGRESSIVE,
     plant_safe=PlantSafe.SAFE,
+    strain_specific=False,
 )
 LEAF = Item("110092", "-", "Leaf Fish Leopard Ctenopoma", Decimal("5.99"), Decimal("4.99"), 30)
 SOLD_OUT = Item("110200", "L", "Datnoid Indo", Decimal("89.99"), None, 0)
@@ -550,12 +551,16 @@ def _enriched_client(tmp_path):
     persist_enrichment(
         conn,
         "110042",
-        EnrichmentResult(None, None, Difficulty.BEGINNER, Temperament.PEACEFUL, PlantSafe.SAFE),
+        EnrichmentResult(
+            None, None, Difficulty.BEGINNER, Temperament.PEACEFUL, PlantSafe.SAFE, False
+        ),
     )
     persist_enrichment(
         conn,
         "110092",
-        EnrichmentResult(None, None, Difficulty.ADVANCED, Temperament.AGGRESSIVE, PlantSafe.UNSAFE),
+        EnrichmentResult(
+            None, None, Difficulty.ADVANCED, Temperament.AGGRESSIVE, PlantSafe.UNSAFE, False
+        ),
     )
     return conn, TestClient(create_app(conn))
 

@@ -47,6 +47,9 @@ class EnrichmentResult:
 
     The species names are nullable and every Classifier carries ``unknown``: an honest gap, never
     a fabricated value, is what reaches the result.
+
+    ``strain_specific`` marks a line-bred or fancy variant whose wild-type species photo is the
+    wrong fish, so automatic image acquisition skips it and manual upload stays the image path.
     """
 
     scientific_name: str | None
@@ -54,6 +57,7 @@ class EnrichmentResult:
     difficulty: Difficulty
     temperament: Temperament
     plant_safe: PlantSafe
+    strain_specific: bool
 
 
 _TOOL_NAME = "record_enrichment"
@@ -72,6 +76,8 @@ def build_tool() -> dict:
             "Record the resolved species and care Classifiers for one aquarium-trade Item. "
             "Use unknown for any Classifier you cannot judge confidently, and null for the "
             "species names when the trade name does not map to a species with confidence. "
+            "Set strain_specific true when the trade name is a line-bred or fancy variant whose "
+            "wild-type species photo would be the wrong fish; false for a true wild-type Item. "
             "Never guess."
         ),
         "strict": True,
@@ -83,6 +89,7 @@ def build_tool() -> dict:
                 "difficulty": {"enum": [m.value for m in Difficulty]},
                 "temperament": {"enum": [m.value for m in Temperament]},
                 "plant_safe": {"enum": [m.value for m in PlantSafe]},
+                "strain_specific": {"type": "boolean"},
             },
             "required": [
                 "scientific_name",
@@ -90,6 +97,7 @@ def build_tool() -> dict:
                 "difficulty",
                 "temperament",
                 "plant_safe",
+                "strain_specific",
             ],
             "additionalProperties": False,
         },
@@ -108,6 +116,7 @@ def parse_enrichment(payload: dict) -> EnrichmentResult:
         difficulty=_classifier(Difficulty, payload.get("difficulty")),
         temperament=_classifier(Temperament, payload.get("temperament")),
         plant_safe=_classifier(PlantSafe, payload.get("plant_safe")),
+        strain_specific=bool(payload.get("strain_specific")),
     )
 
 
