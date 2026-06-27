@@ -41,6 +41,7 @@ ORNATE_ENRICHMENT = EnrichmentResult(
     difficulty=Difficulty.INTERMEDIATE,
     temperament=Temperament.SEMI_AGGRESSIVE,
     plant_safe=PlantSafe.SAFE,
+    strain_specific=False,
 )
 
 
@@ -228,6 +229,22 @@ def test_persisting_enrichment_leaves_a_manual_override_intact(tmp_path):
     assert override["value"] == "peaceful"
     reenriched = enrichment_for(conn, "110042")
     assert reenriched is not None and reenriched.temperament is Temperament.AGGRESSIVE
+
+
+def test_strain_specific_persists_and_a_re_enrich_overwrites_it_wholesale(tmp_path):
+    conn = open_store(tmp_path / "fishpage.db")
+    reconcile(conn, [ORNATE_M], JUN19)
+
+    # First read: a line-bred strain — the wild-type photo would be the wrong fish.
+    persist_enrichment(conn, "110042", replace(ORNATE_ENRICHMENT, strain_specific=True))
+    first = enrichment_for(conn, "110042")
+    assert first is not None and first.strain_specific is True
+
+    # A re-enrich now reads it as a true wild-type: the flag is part of the AI care block and is
+    # overwritten wholesale like the rest of it, with no manual-override carve-out of its own.
+    persist_enrichment(conn, "110042", replace(ORNATE_ENRICHMENT, strain_specific=False))
+    second = enrichment_for(conn, "110042")
+    assert second is not None and second.strain_specific is False
 
 
 def test_a_manual_classifier_override_round_trips(tmp_path):

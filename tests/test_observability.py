@@ -16,6 +16,7 @@ AN_ENRICHMENT = EnrichmentResult(
     difficulty=Difficulty.INTERMEDIATE,
     temperament=Temperament.SEMI_AGGRESSIVE,
     plant_safe=PlantSafe.SAFE,
+    strain_specific=False,
 )
 
 

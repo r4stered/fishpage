@@ -197,12 +197,13 @@ def persist_enrichment(conn: sqlite3.Connection, sku: str, result: EnrichmentRes
     """
     conn.execute(
         "INSERT INTO enrichment "
-        "(sku, scientific_name, common_name, difficulty, temperament, plant_safe) "
-        "VALUES (:sku, :scientific_name, :common_name, :difficulty, :temperament, :plant_safe) "
+        "(sku, scientific_name, common_name, difficulty, temperament, plant_safe, strain_specific) "
+        "VALUES (:sku, :scientific_name, :common_name, :difficulty, :temperament, :plant_safe, "
+        ":strain_specific) "
         "ON CONFLICT(sku) DO UPDATE SET "
         "scientific_name = excluded.scientific_name, common_name = excluded.common_name, "
         "difficulty = excluded.difficulty, temperament = excluded.temperament, "
-        "plant_safe = excluded.plant_safe",
+        "plant_safe = excluded.plant_safe, strain_specific = excluded.strain_specific",
         {
             "sku": sku,
             "scientific_name": result.scientific_name,
@@ -210,12 +211,15 @@ def persist_enrichment(conn: sqlite3.Connection, sku: str, result: EnrichmentRes
             "difficulty": result.difficulty.value,
             "temperament": result.temperament.value,
             "plant_safe": result.plant_safe.value,
+            "strain_specific": int(result.strain_specific),
         },
     )
     conn.commit()
 
 
-_ENRICHMENT_COLUMNS = "scientific_name, common_name, difficulty, temperament, plant_safe"
+_ENRICHMENT_COLUMNS = (
+    "scientific_name, common_name, difficulty, temperament, plant_safe, strain_specific"
+)
 
 
 def _row_to_enrichment(row: sqlite3.Row) -> EnrichmentResult:
@@ -225,6 +229,7 @@ def _row_to_enrichment(row: sqlite3.Row) -> EnrichmentResult:
         difficulty=Difficulty(row["difficulty"]),
         temperament=Temperament(row["temperament"]),
         plant_safe=PlantSafe(row["plant_safe"]),
+        strain_specific=bool(row["strain_specific"]),
     )
 
 

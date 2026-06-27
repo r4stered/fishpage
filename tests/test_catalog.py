@@ -19,6 +19,7 @@ AN_ENRICHMENT = EnrichmentResult(
     difficulty=Difficulty.INTERMEDIATE,
     temperament=Temperament.SEMI_AGGRESSIVE,
     plant_safe=PlantSafe.SAFE,
+    strain_specific=False,
 )
 
 
@@ -59,6 +60,7 @@ def test_an_unknown_ai_value_is_dropped_but_the_honest_ones_remain():
         difficulty=Difficulty.UNKNOWN,
         temperament=Temperament.PEACEFUL,
         plant_safe=PlantSafe.UNKNOWN,
+        strain_specific=False,
     )
 
     views = _by_key(resolve_classifiers(honest_gap, {}))
@@ -77,6 +79,7 @@ def test_a_manual_override_can_resolve_an_unknown_ai_value():
         difficulty=Difficulty.UNKNOWN,
         temperament=Temperament.UNKNOWN,
         plant_safe=PlantSafe.UNKNOWN,
+        strain_specific=False,
     )
 
     views = _by_key(resolve_classifiers(honest_gap, {"difficulty": "advanced"}))
@@ -130,10 +133,10 @@ def test_build_cards_marks_new_this_week_against_the_latest_stocklist_date():
 
 def _cards_for_filtering():
     beginner_peaceful = EnrichmentResult(
-        None, None, Difficulty.BEGINNER, Temperament.PEACEFUL, PlantSafe.SAFE
+        None, None, Difficulty.BEGINNER, Temperament.PEACEFUL, PlantSafe.SAFE, False
     )
     advanced_aggressive = EnrichmentResult(
-        None, None, Difficulty.ADVANCED, Temperament.AGGRESSIVE, PlantSafe.UNSAFE
+        None, None, Difficulty.ADVANCED, Temperament.AGGRESSIVE, PlantSafe.UNSAFE, False
     )
     return build_cards(
         [ORNATE_M, LEAF],
@@ -173,7 +176,7 @@ def test_filtering_on_a_manual_override_uses_the_resolved_value():
         [ORNATE_M],
         enrichments={
             "110042": EnrichmentResult(
-                None, None, Difficulty.ADVANCED, Temperament.UNKNOWN, PlantSafe.UNKNOWN
+                None, None, Difficulty.ADVANCED, Temperament.UNKNOWN, PlantSafe.UNKNOWN, False
             )
         },
         images={},

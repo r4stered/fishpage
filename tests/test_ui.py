@@ -250,6 +250,7 @@ def test_cards_render_classifier_badges_marked_by_provenance():
         difficulty=Difficulty.ADVANCED,  # AI read, overridden below
         temperament=Temperament.PEACEFUL,  # AI read, stands
         plant_safe=PlantSafe.UNKNOWN,  # honest gap, no badge
+        strain_specific=False,
     )
     html = render_grid(
         _cards(
@@ -293,7 +294,7 @@ def test_each_card_offers_an_inline_override_form_per_classifier():
     from fishpage.enricher import Difficulty, EnrichmentResult, PlantSafe, Temperament
 
     enrichment = EnrichmentResult(
-        None, None, Difficulty.ADVANCED, Temperament.PEACEFUL, PlantSafe.UNKNOWN
+        None, None, Difficulty.ADVANCED, Temperament.PEACEFUL, PlantSafe.UNKNOWN, False
     )
     html = render_grid(_cards([ORNATE_M], enrichments={"110042": enrichment}))
 
@@ -314,7 +315,7 @@ def test_the_override_select_preselects_the_current_resolved_value():
     from fishpage.enricher import Difficulty, EnrichmentResult, PlantSafe, Temperament
 
     enrichment = EnrichmentResult(
-        None, None, Difficulty.ADVANCED, Temperament.PEACEFUL, PlantSafe.SAFE
+        None, None, Difficulty.ADVANCED, Temperament.PEACEFUL, PlantSafe.SAFE, False
     )
     html = render_grid(_cards([ORNATE_M], enrichments={"110042": enrichment}))
 

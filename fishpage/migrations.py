@@ -122,6 +122,16 @@ MIGRATIONS: list[tuple[int, str]] = [
         ALTER TABLE items ADD COLUMN first_seen TEXT;
         """,
     ),
+    (
+        8,
+        # Whether the Item is a line-bred or fancy variant whose wild-type species photo would be
+        # the wrong fish — the gate that keeps automatic image acquisition from storing a misleading
+        # sourced photo for a strain. SQLite has no boolean, so it is an INTEGER (0/1). Existing
+        # enrichment rows predate the column and default to 0 (wild-type) until a re-enrich sets it.
+        """
+        ALTER TABLE enrichment ADD COLUMN strain_specific INTEGER NOT NULL DEFAULT 0;
+        """,
+    ),
 ]
 
 
