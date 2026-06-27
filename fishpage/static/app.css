@@ -261,6 +261,37 @@ a {
   border-radius: 999px;
 }
 
+/* Back-in-stock marker: the same pill shape as the new-this-week badge but outlined in the accent
+   rather than filled, so a SKU that returned from a stock-out reads as related-but-distinct from a
+   first-ever sighting. */
+.card .badge-back-in-stock {
+  align-self: flex-start;
+  padding: 0.15rem 0.55rem;
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--accent);
+  background: var(--surface);
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+}
+
+/* Price-changed indicator: an arrow and the size of the move since the previous Stocklist. A rise
+   reads warm and a drop reads cool, so the direction lands before the number is read. */
+.card .price-change {
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.card .price-change-up {
+  color: #b4452f;
+}
+
+.card .price-change-down {
+  color: #2f7d52;
+}
+
 /* The manual image upload reads as a quiet footer: pinned to the card's bottom with margin-top:auto
    so it lines up across a row even when a special-price badge makes one card taller, and stacked
    above a divider so the file picker and submit don't wrap into a disjointed cluster. */

@@ -122,6 +122,25 @@ MIGRATIONS: list[tuple[int, str]] = [
         ALTER TABLE items ADD COLUMN first_seen TEXT;
         """,
     ),
+    (
+        7,
+        # An immutable per-SKU snapshot for one Stocklist date: the retail and special price and
+        # quantity as that Stocklist printed them. Append-only — ingestion inserts one row per SKU
+        # per Stocklist date and never updates or deletes it, so the live items row stays the fast
+        # current-state read while this ledger keeps the week-over-week history the upsert destroys.
+        # The (sku, stocklist_date) primary key makes a re-run of the same Stocklist a no-op append
+        # rather than a duplicate row. Prices are TEXT, the same str(Decimal) form items stores.
+        """
+        CREATE TABLE IF NOT EXISTS stocklist_history (
+            sku            TEXT NOT NULL,
+            stocklist_date TEXT NOT NULL,
+            retail_price   TEXT NOT NULL,
+            special_price  TEXT,
+            qty            INTEGER NOT NULL,
+            PRIMARY KEY (sku, stocklist_date)
+        );
+        """,
+    ),
 ]
 
 

@@ -39,6 +39,7 @@ from fishpage.store import (
     item_exists,
     latest_stocklist_date,
     pick_list_for,
+    prior_snapshots,
     remove_from_pick_list,
     set_classifier_override,
     set_pick_list_quantity,
@@ -324,16 +325,19 @@ def create_app(
         items: list[Item],
         selected_classifiers: dict[str, set[str]],
         latest_date: date | None,
+        priors: dict,
     ) -> list:
         # Resolve every visible Item's Classifiers from one batch read each, then apply the
         # Classifier facets on the *resolved* values — so a manual override is what a chip filters
-        # on, exactly as it is what a badge shows. latest_date drives the new-this-week badge.
+        # on, exactly as it is what a badge shows. latest_date drives the new-this-week badge;
+        # priors (each SKU's previous snapshot) drive the price-changed and back-in-stock badges.
         cards = build_cards(
             items,
             enrichments=all_enrichments(conn),
             images=all_images(conn),
             overrides=all_classifier_overrides(conn),
             latest_date=latest_date,
+            priors=priors,
         )
         return filter_cards_by_classifiers(cards, selected_classifiers)
 
@@ -345,6 +349,7 @@ def create_app(
         size: str | None = None,
         on_special: bool = False,
         new_only: bool = False,
+        back_in_stock_only: bool = False,
         search: str = "",
         sort: str = "",
         page: int = 1,
@@ -361,6 +366,10 @@ def create_app(
         # The latest Stocklist date drives "this week" — the same MAX(last_seen) ingestion keeps
         # monotonic — and is read once for both the new-only filter and the per-card badge.
         latest_date = latest_stocklist_date(conn)
+        # Each SKU's previous snapshot (the history row before the latest Stocklist) drives the
+        # price-changed and back-in-stock derivations, read once for the filter and the per-card
+        # badges.
+        priors = prior_snapshots(conn, latest_date)
         if not include_out_of_stock:
             items = [item for item in items if item.qty_avail > 0]
         items = browse(
@@ -369,7 +378,9 @@ def create_app(
             size=size,
             on_special=on_special,
             new_only=new_only,
+            back_in_stock_only=back_in_stock_only,
             latest_date=latest_date,
+            priors=priors,
             search=search,
             sort=sort,
         )
@@ -378,7 +389,7 @@ def create_app(
             "temperament": set(temperament),
             "plant_safe": set(plant_safe),
         }
-        cards = _filtered_cards(items, selected_classifiers, latest_date)
+        cards = _filtered_cards(items, selected_classifiers, latest_date, priors)
         # Window the filtered cards so even the full ~900-Item set (include out-of-stock on) renders
         # one bounded page of DOM, not all of it. The trailing sentinel points at the next page with
         # the active filters preserved, so a load-more continues the same filtered view.
@@ -423,6 +434,7 @@ def create_app(
                 selected_size=size,
                 on_special=on_special,
                 new_only=new_only,
+                back_in_stock_only=back_in_stock_only,
                 search=search,
                 sort=sort,
                 selected_classifiers=selected_classifiers,
