@@ -180,8 +180,15 @@ teardown CONFIRM="": _bootstrap-preflight
     # Destroy the declarative cloud infra (R2 buckets + tokens, Cloudflare edge, Grafana, GitHub secret).
     tofu -chdir=infra init -input=false -backend-config=backend.hcl
     tofu -chdir=infra destroy -auto-approve
-    # Destroy the Fly app and its Machine, if it still exists.
-    flyctl status -a {{app}} >/dev/null 2>&1 && flyctl apps destroy {{app}} --yes || echo "fly app {{app}}: already gone"
+    # Destroy the Fly app and its Machine, if it still exists. An explicit if, not `status && destroy
+    # || echo`: in that chain a real destroy failure is a non-final list member, so errexit ignores
+    # it and the fallback echo masks it as success. Here only an absent app takes the echo branch; a
+    # failed destroy propagates and aborts the recipe.
+    if flyctl status -a {{app}} >/dev/null 2>&1; then
+        flyctl apps destroy {{app}} --yes
+    else
+        echo "fly app {{app}}: already gone"
+    fi
     echo "Cloud infra destroyed. The R2 state bucket fishpage-tfstate still holds the (now empty) state — drop it by hand when you no longer need it: wrangler r2 bucket delete fishpage-tfstate"
 
 # Dry-run the declarative half: prove a re-apply is a clean no-op without changing anything.
