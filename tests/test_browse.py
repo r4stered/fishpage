@@ -2,8 +2,13 @@ from dataclasses import replace
 from datetime import date
 from decimal import Decimal
 
-from fishpage.browse import browse, is_new_this_week
-from fishpage.models import Item
+from fishpage.browse import (
+    browse,
+    is_back_in_stock,
+    is_new_this_week,
+    price_change,
+)
+from fishpage.models import Item, PriorSnapshot
 
 JUN19 = date(2026, 6, 19)
 JUN26 = date(2026, 6, 26)
@@ -56,6 +61,57 @@ def test_new_only_off_keeps_everything():
     result = browse([brand_new, returning], new_only=False, latest_date=JUN26)
 
     assert {item.sku for item in result} == {"1", "2"}
+
+
+def test_price_change_reads_direction_and_delta_off_the_effective_price():
+    # Retail rose 10 → 12 with no special either week: an up move of 2 on the effective price.
+    item = replace(PLAIN, retail_price=Decimal("12.00"))
+    prior = PriorSnapshot(Decimal("10.00"), None, 5)
+    change = price_change(item, prior)
+    assert change is not None
+    assert change.direction == "up"
+    assert change.delta == Decimal("2.00")
+
+    # A special this week drops the effective price below last week's retail — a down move judged on
+    # the price that actually applies, not the retail.
+    discounted = replace(PLAIN, retail_price=Decimal("10.00"), special_price=Decimal("6.00"))
+    down = price_change(discounted, prior)
+    assert down is not None
+    assert down.direction == "down"
+    assert down.delta == Decimal("4.00")
+
+
+def test_price_change_is_none_with_no_prior_or_an_unchanged_price():
+    # A SKU new this week has no prior snapshot — nothing to compare.
+    assert price_change(PLAIN, None) is None
+    # Same effective price as last week → no change to surface.
+    assert price_change(PLAIN, PriorSnapshot(Decimal("10.00"), None, 5)) is None
+
+
+def test_back_in_stock_needs_a_zero_prior_and_a_positive_now():
+    in_stock = replace(PLAIN, qty_avail=5)
+    # Prior qty 0, now positive → back in stock.
+    assert is_back_in_stock(in_stock, PriorSnapshot(Decimal("10.00"), None, 0)) is True
+    # Prior was already in stock → not "back".
+    assert is_back_in_stock(in_stock, PriorSnapshot(Decimal("10.00"), None, 3)) is False
+    # No prior snapshot (new this week) → never back in stock.
+    assert is_back_in_stock(in_stock, None) is False
+    # Prior was 0 but still out of stock now → not back yet.
+    out_now = replace(PLAIN, qty_avail=0)
+    assert is_back_in_stock(out_now, PriorSnapshot(Decimal("10.00"), None, 0)) is False
+
+
+def test_back_in_stock_only_keeps_only_returned_items():
+    returned = replace(PLAIN, qty_avail=5)  # was 0, now 5
+    steady = replace(DISCOUNTED, qty_avail=5)  # was in stock all along
+    priors = {
+        returned.sku: PriorSnapshot(Decimal("10.00"), None, 0),
+        steady.sku: PriorSnapshot(Decimal("100.00"), Decimal("5.00"), 5),
+    }
+
+    result = browse([returned, steady], back_in_stock_only=True, priors=priors)
+
+    assert [item.sku for item in result] == ["1"]
 
 
 def test_sort_newest_orders_by_first_sight_descending_unknowns_last():

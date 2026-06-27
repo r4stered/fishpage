@@ -11,9 +11,9 @@ from dataclasses import dataclass
 from datetime import date
 from enum import StrEnum
 
-from fishpage.browse import is_new_this_week
+from fishpage.browse import PriceChange, is_back_in_stock, is_new_this_week, price_change
 from fishpage.enricher import Difficulty, EnrichmentResult, PlantSafe, Temperament
-from fishpage.models import ImageRecord, Item, Provenance
+from fishpage.models import ImageRecord, Item, PriorSnapshot, Provenance
 
 
 @dataclass(frozen=True)
@@ -29,13 +29,16 @@ class ClassifierView:
 @dataclass(frozen=True)
 class Card:
     """Everything one catalog card draws from: the Item, its image (or ``None``), its resolved
-    display Classifiers, and whether it is new this week. The single bundle the grid template
+    display Classifiers, whether it is new this week, its effective-price move since the previous
+    Stocklist (or ``None``), and whether it is back in stock. The single bundle the grid template
     iterates — no parallel side-maps."""
 
     item: Item
     image: ImageRecord | None
     classifiers: list[ClassifierView]
     new_this_week: bool = False
+    price_change: PriceChange | None = None
+    back_in_stock: bool = False
 
     @property
     def values(self) -> dict[str, str]:
@@ -102,19 +105,30 @@ def build_cards(
     images: dict[str, ImageRecord],
     overrides: dict[str, dict[str, str]],
     latest_date: date | None = None,
+    priors: dict[str, PriorSnapshot] | None = None,
 ) -> list[Card]:
     """Assemble one :class:`Card` per Item, in order, joining the batch-read enrichment, image, and
-    override maps and marking each Item new-this-week against ``latest_date`` (the latest Stocklist
-    date). An Item missing from a map degrades cleanly — no image, no badges."""
-    return [
-        Card(
-            item=item,
-            image=images.get(item.sku),
-            classifiers=resolve_classifiers(enrichments.get(item.sku), overrides.get(item.sku, {})),
-            new_this_week=is_new_this_week(item, latest_date),
+    override maps. Each Item is marked new-this-week against ``latest_date`` (the latest Stocklist
+    date), and its previous snapshot in ``priors`` drives the price-changed indicator and the
+    back-in-stock badge. An Item missing from a map degrades cleanly — no image, no badges, and with
+    no prior snapshot neither a price change nor a back-in-stock is claimed."""
+    priors = priors or {}
+    cards = []
+    for item in items:
+        prior = priors.get(item.sku)
+        cards.append(
+            Card(
+                item=item,
+                image=images.get(item.sku),
+                classifiers=resolve_classifiers(
+                    enrichments.get(item.sku), overrides.get(item.sku, {})
+                ),
+                new_this_week=is_new_this_week(item, latest_date),
+                price_change=price_change(item, prior),
+                back_in_stock=is_back_in_stock(item, prior),
+            )
         )
-        for item in items
-    ]
+    return cards
 
 
 def filter_cards_by_classifiers(cards: list[Card], selected: dict[str, set[str]]) -> list[Card]:

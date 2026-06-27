@@ -16,7 +16,7 @@ from fishpage import observability
 from fishpage.catalog import classifier_spec
 from fishpage.enricher import Difficulty, EnrichmentResult, PlantSafe, Temperament
 from fishpage.migrations import migrate
-from fishpage.models import ImageRecord, Item, PickLine, Provenance
+from fishpage.models import ImageRecord, Item, PickLine, PriorSnapshot, Provenance
 
 _log = logging.getLogger(__name__)
 
@@ -103,6 +103,17 @@ def reconcile(conn: sqlite3.Connection, items: list[Item], stocklist_date: date)
         "UPDATE items SET qty_avail = 0 WHERE last_seen IS NOT ?",
         (stocklist_date.isoformat(),),
     )
+    # Append the immutable per-SKU snapshot for this Stocklist alongside the upsert, in the same
+    # transaction. This ledger is never updated or deleted: it preserves the price and quantity the
+    # upsert above just overwrote, so the week-over-week deltas (price changed, back in stock) stay
+    # derivable. INSERT OR IGNORE keeps a re-run of the same Stocklist date a no-op rather than a
+    # conflict — the (sku, stocklist_date) row already written stands.
+    conn.executemany(
+        "INSERT OR IGNORE INTO stocklist_history "
+        "(sku, stocklist_date, retail_price, special_price, qty) "
+        "VALUES (:sku, :last_seen, :retail, :special, :qty)",
+        params,
+    )
     conn.commit()
 
 
@@ -134,6 +145,35 @@ def latest_stocklist_date(conn: sqlite3.Connection) -> date | None:
     """
     row = conn.execute("SELECT MAX(last_seen) AS latest FROM items").fetchone()
     return None if row["latest"] is None else date.fromisoformat(row["latest"])
+
+
+def prior_snapshots(conn: sqlite3.Connection, before: date | None) -> dict[str, PriorSnapshot]:
+    """Each SKU's most recent history snapshot strictly before ``before``, keyed by SKU.
+
+    The "previous Stocklist" view the week-over-week deltas compare against: for every SKU, the
+    history row with the greatest ``stocklist_date`` earlier than ``before`` (the current Stocklist
+    date). A SKU first seen in the current Stocklist has no earlier row and is simply absent from
+    the mapping — no prior to compare, so neither a price change nor a back-in-stock can be claimed
+    for it. ``before`` of ``None`` (an empty catalog) yields an empty mapping.
+    """
+    if before is None:
+        return {}
+    rows = conn.execute(
+        "SELECT h.sku, h.retail_price, h.special_price, h.qty "
+        "FROM stocklist_history h "
+        "JOIN (SELECT sku, MAX(stocklist_date) AS prev FROM stocklist_history "
+        "      WHERE stocklist_date < ? GROUP BY sku) p "
+        "  ON p.sku = h.sku AND p.prev = h.stocklist_date",
+        (before.isoformat(),),
+    ).fetchall()
+    return {
+        row["sku"]: PriorSnapshot(
+            retail_price=Decimal(row["retail_price"]),
+            special_price=None if row["special_price"] is None else Decimal(row["special_price"]),
+            qty=row["qty"],
+        )
+        for row in rows
+    }
 
 
 def all_items(conn: sqlite3.Connection, *, include_out_of_stock: bool = True) -> list[Item]:
