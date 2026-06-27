@@ -5,10 +5,25 @@
   <p><a class="button" href="/">Back to catalog</a></p>
   {% include "_pick_list.html" %}
   {% if lines %}
-    {# A plain form post, not an hx-post: export downloads the order-ready text file and clears the
-       list, so the page reloads to the now-empty list rather than swapping a fragment in place. #}
-    <form class="pick-export" method="post" action="/pick-list/export">
-      <button type="submit">Export &amp; clear</button>
+    {# Export hands back a file download, which a plain form post can't pair with a page update —
+       the browser keeps the now-stale list on screen. Fetch the download as a blob, save it, then
+       reload so the served list reflects the cleared state. The download is already in memory, so
+       reloading immediately can't cancel it. #}
+    <form class="pick-export" method="post" action="/pick-list/export"
+          onsubmit="event.preventDefault(); exportPickList(this);">
+      <button class="button" type="submit">Export &amp; clear</button>
     </form>
+    <script>
+      async function exportPickList(form) {
+        const res = await fetch(form.action, {method: "POST"});
+        if (res.ok) {
+          const a = document.createElement("a");
+          a.href = URL.createObjectURL(await res.blob());
+          a.download = "pick-list.txt";
+          a.click();
+        }
+        location.reload();
+      }
+    </script>
   {% endif %}
 {% endblock %}
