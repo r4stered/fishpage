@@ -402,7 +402,12 @@ def create_app(
         if hx_request:
             return HTMLResponse(
                 render_grid(
-                    window, images_enabled=images_enabled, has_more=has_more, next_url=next_url
+                    window,
+                    images_enabled=images_enabled,
+                    has_more=has_more,
+                    next_url=next_url,
+                    total=len(cards),
+                    oob=True,
                 )
             )
         return HTMLResponse(
