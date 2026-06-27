@@ -20,6 +20,8 @@ def render_grid(
     images_enabled: bool = False,
     has_more: bool = False,
     next_url: str = "",
+    total: int | None = None,
+    oob: bool = False,
 ) -> str:
     """Render the whole ``<ul>`` grid: one window of Item cards plus, when ``has_more``, the
     load-more sentinel. This is the fragment the full catalog page includes and the fragment an
@@ -28,13 +30,20 @@ def render_grid(
     Each :class:`Card` carries its Item, resolved Classifiers, and image record (or ``None``), so a
     card renders correctly un-enriched, enriched, or manually-overridden from one template.
     ``images_enabled`` adds the per-card manual upload form only when an image bucket is configured
-    to receive it. ``next_url`` is where the sentinel points for the next window."""
+    to receive it. ``next_url`` is where the sentinel points for the next window.
+
+    The item count sits outside the grid, so an HTMX filter swap can't reach it by swapping the
+    grid alone. ``oob`` appends an out-of-band ``#item-count`` carrying ``total`` (the size of the
+    filtered set), updating the count in the same response; it stays off on the include path the
+    full page uses, which renders the count itself."""
     return _env.get_template("_grid.html").render(
         cards=cards,
         classifiers=CLASSIFIERS,
         images_enabled=images_enabled,
         has_more=has_more,
         next_url=next_url,
+        total=total,
+        oob=oob,
     )
 
 
