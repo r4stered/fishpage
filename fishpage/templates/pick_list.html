@@ -4,4 +4,11 @@
   <h1>Pick list</h1>
   <p><a class="button" href="/">Back to catalog</a></p>
   {% include "_pick_list.html" %}
+  {% if lines %}
+    {# A plain form post, not an hx-post: export downloads the order-ready text file and clears the
+       list, so the page reloads to the now-empty list rather than swapping a fragment in place. #}
+    <form class="pick-export" method="post" action="/pick-list/export">
+      <button type="submit">Export &amp; clear</button>
+    </form>
+  {% endif %}
 {% endblock %}

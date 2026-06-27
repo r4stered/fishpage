@@ -15,6 +15,7 @@ from fishpage.store import (
     all_items,
     attach_image,
     clear_enrichment,
+    clear_pick_list,
     enrichment_for,
     image_for,
     latest_stocklist_date,
@@ -383,4 +384,17 @@ def test_one_actor_never_sees_anothers_pick_list(tmp_path):
     # The list is keyed by Actor, so each buyer's gathered Items are theirs alone — Bob's add never
     # bleeds into Alice's list and vice versa.
     assert [line.item.sku for line in pick_list_for(conn, "alice@sdc.test")] == ["110042"]
+    assert [line.item.sku for line in pick_list_for(conn, "bob@sdc.test")] == ["110092"]
+
+
+def test_clear_pick_list_wipes_only_the_named_actors_lines(tmp_path):
+    conn = open_store(tmp_path / "fishpage.db")
+    reconcile(conn, [ORNATE_M, LEAF], JUN19)
+    add_to_pick_list(conn, "alice@sdc.test", "110042")
+    add_to_pick_list(conn, "bob@sdc.test", "110092")
+
+    clear_pick_list(conn, "alice@sdc.test")
+
+    # Alice's list is emptied; Bob's is untouched — the wipe is scoped to the one Actor.
+    assert pick_list_for(conn, "alice@sdc.test") == []
     assert [line.item.sku for line in pick_list_for(conn, "bob@sdc.test")] == ["110092"]
